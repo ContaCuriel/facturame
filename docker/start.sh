@@ -1,14 +1,18 @@
 #!/bin/sh
 
-# 1. Ejecutar migraciones y caché
+# 1. Migraciones y caché (Le quitamos el caché de configuración por ahora para evitar problemas con las variables .env)
 php artisan migrate --force
-php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-# 2. ¡EL TRUCO SENIOR! Devolver la propiedad de los archivos generados al usuario web
+# 2. Permisos
 chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# 3. Iniciar servicios
+# 3. MODO DEBUG: Crear el archivo de log si no existe y enviarlo a la consola de Render
+touch /var/www/html/storage/logs/laravel.log
+chmod 777 /var/www/html/storage/logs/laravel.log
+tail -f /var/www/html/storage/logs/laravel.log &
+
+# 4. Iniciar servicios
 php-fpm -D
 nginx -g "daemon off;"
