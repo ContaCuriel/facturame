@@ -165,29 +165,25 @@ class InvoiceController extends Controller
 {
     $this->authorize('view', $invoice->company);
 
-    // 1. Obtener el HTML de Facturama
-    $response = $facturama->getInvoiceFile($invoice->facturama_id, 'html');
+    // 1. Pedimos directamente el 'pdf' nativo de Facturama
+    $response = $facturama->getInvoiceFile($invoice->facturama_id, 'pdf');
 
     if ($response->failed()) {
-        return back()->with('error', "No se pudo obtener la base del PDF de Facturama.");
+        return back()->with('error', "No se pudo obtener el PDF de Facturama.");
     }
 
-    $base64Content = data_get($response->json(), 'Content');
+    $fileData = $response->json();
+    $base64Content = data_get($fileData, 'Content');
+
     if (!$base64Content) {
-        return back()->with('error', 'No se encontró el contenido HTML en la respuesta.');
+        return back()->with('error', 'No se encontró el contenido del PDF en la respuesta.');
     }
 
-    $htmlContent = base64_decode($base64Content);
-
-
-    // 2. ✅ EXTRAER los datos del HTML original
-    $invoiceData = $this->extractDataFromHtml($htmlContent, $invoice);
-
-    // 3. ✅ RENDERIZAR el PDF desde nuestra plantilla limpia
-    $pdf = Pdf::loadView('pdf.invoice', $invoiceData) // Apunta a nuestra nueva vista
-              ->setPaper('letter', 'portrait');
-
-    return $pdf->download($invoice->uuid . '.pdf');
+    // 2. Decodificamos y enviamos al navegador con el nombre correcto
+    return response(base64_decode($base64Content), 200, [
+        'Content-Type' => 'application/pdf',
+        'Content-Disposition' => 'attachment; filename="' . $invoice->uuid . '.pdf"',
+    ]);
 }
 
 
