@@ -121,27 +121,20 @@ class CompanyController extends Controller
         return view('companies.logo', compact('company'));
     }
 
-    public function storeLogo(Request $request, Company $company, FacturamaService $facturama)
-    {
-        $this->authorize('update', $company);
+    public function storeLogo(Request $request, Company $company)
+{
+    $this->authorize('update', $company);
 
-        $request->validate([
-            'logo' => 'required|image|mimes:jpeg,png,jpg|max:2048',
-        ]);
+    $request->validate([
+        'logo' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+    ]);
 
-        $path = $request->file('logo')->store('logos', 'public');
-        $company->update(['logo_path' => $path]);
+    // Guarda el logo en storage/app/public/logos
+    $path = $request->file('logo')->store('logos', 'public');
+    $company->update(['logo_path' => $path]);
 
-        $fileContent = Storage::disk('public')->get($path);
-        $base64Image = base64_encode($fileContent);
-        $imageType = $request->file('logo')->getClientOriginalExtension();
+    // ¡ELIMINAMOS LA LLAMADA AL FACTURAMASERVICE AQUÍ!
 
-        $response = $facturama->uploadLogo($base64Image, $imageType);
-
-        if ($response->failed()) {
-            return back()->with('error', 'El logo se guardó localmente, pero falló la subida a Facturama. Respuesta: ' . $response->body());
-        }
-
-        return redirect()->back()->with('success', '¡Logo actualizado y subido a Facturama correctamente!');
-    }
+    return redirect()->back()->with('success', '¡Logo guardado exitosamente para tus facturas!');
+}
 }

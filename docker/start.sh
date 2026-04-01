@@ -5,8 +5,11 @@ php artisan migrate --force
 php artisan route:cache
 php artisan view:cache
 
-# 2. Permisos
-chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# Crear acceso público para que Facturama vea los logos
+php artisan storage:link
+
+# Permisos (Asegúrate de que quede después del storage:link)
+chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/public/storage
 
 # 3. MODO DEBUG: Crear el archivo de log si no existe y enviarlo a la consola de Render
 touch /var/www/html/storage/logs/laravel.log
