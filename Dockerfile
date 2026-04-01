@@ -4,6 +4,13 @@ WORKDIR /var/www/html
 COPY . .
 RUN composer install --no-dev --no-interaction --optimize-autoloader --ignore-platform-reqs
 
+# --- ¡LO NUEVO! Instalar Node.js y compilar el diseño (Vite/Tailwind) ---
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install \
+    && npm run build
+# ----------------------------------------------------------------------
+
 # ETAPA 2: La Imagen Final de Producción
 FROM php:8.3-fpm-bullseye
 WORKDIR /var/www/html
@@ -26,7 +33,7 @@ RUN apt-get update && apt-get install -y \
 # Copiar configuración de PHP para subidas
 COPY docker/php-uploads.ini /usr/local/etc/php/conf.d/99-uploads.ini    
 
-# Copiar la app desde el constructor
+# Copiar la app (AQUÍ YA VIENE CON EL CSS COMPILADO DE LA ETAPA 1)
 COPY --from=builder /var/www/html .
 
 # Configurar permisos para Laravel
