@@ -1,35 +1,33 @@
-FROM php:8.2-apache
+# ETAPA 1: El Constructor
+FROM laravelsail/php83-composer:latest as builder
+WORKDIR /var/www/html
+COPY . .
+RUN composer install --no-dev --no-interaction --optimize-autoloader --ignore-platform-reqs
 
-# 1. Instalar dependencias del sistema (Cambiamos -n por -y que es el correcto)
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    libpng-dev \
-    libzip-dev \
-    zip \
-    unzip \
-    git \
-    && docker-php-ext-install pdo pdo_pgsql gd zip
-
-# 2. Habilitar mod_rewrite de Apache
-RUN a2enmod rewrite
-
-# 3. Directorio de trabajo
+# ETAPA 2: La Imagen Final de Producción
+FROM php:8.3-fpm-bullseye
 WORKDIR /var/www/html
 
-# 4. Copiar archivos del proyecto
-COPY . .
+# Instalar dependencias
+RUN apt-get update && apt-get install -y \
+        nginx libpq-dev gettext libzip-dev \
+        libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install pdo pdo_pgsql zip gd \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# 5. Instalar Composer de forma profesional
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-RUN composer install --no-dev --optimize-autoloader
+# Copiar configuraciones y archivos
+COPY docker/php-uploads.ini /usr/local/etc/php/conf.d/99-uploads.ini    
+COPY --from=builder /var/www/html .
+COPY docker/nginx.conf /etc/nginx/nginx.conf
 
-# 6. Permisos correctos para Laravel
+# Permisos
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+RUN chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
-# 7. Configurar Apache para que apunte a /public
-ENV APACHE_DOCUMENT_ROOT /var/www/html/public
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+# Script de inicio
+COPY docker/start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
 
-# 8. Puerto
 EXPOSE 80
+CMD ["/usr/local/bin/start.sh"]

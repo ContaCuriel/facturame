@@ -41,6 +41,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/search-clients', [ClientController::class, 'search'])->name('api.clients.search');
     Route::get('/api/search-products', [ProductController::class, 'search'])->name('api.products.search');
     Route::post('/api/suggest-taxes', [InvoiceController::class, 'suggestTaxes'])->name('api.ai.suggest_taxes');
+    Route::post('/webhooks/facturama', [App\Http\Controllers\WebhookController::class, 'handle']);
     
     // Rutas de Factura
     Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');

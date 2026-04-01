@@ -11,6 +11,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->validateCsrfTokens(except: [
+        'api/webhooks/facturama', // Facturama no tiene token CSRF de tu app
+    ]);
         //
     })
     ->withExceptions(function (Exceptions $exceptions) {
