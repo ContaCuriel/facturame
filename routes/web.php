@@ -8,9 +8,20 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\SatCatalogController;
 use App\Http\Controllers\StudentController;
+use Illuminate\Support\Facades\Artisan;
 
 Route::get('/', function () {
     return view('auth.login');
+});
+
+// Ruta secreta para importar catálogos sin usar la consola
+Route::get('/importar-catalogo-secreto', function () {
+    try {
+        Artisan::call('import:sat-product-keys');
+        return "¡Comando ejecutado! Resultado: " . Artisan::output();
+    } catch (\Exception $e) {
+        return "Hubo un error: " . $e->getMessage();
+    }
 });
 
 Route::get('/dashboard', [CompanyController::class, 'index'])
