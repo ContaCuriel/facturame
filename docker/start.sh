@@ -1,19 +1,14 @@
 #!/bin/sh
 
-# 1. Migrar la base de datos principal (Landlord / Companies)
+# 1. Ejecutar migraciones y caché
 php artisan migrate --force
-
-# Nota: Si usas bases de datos separadas por cliente con Spatie, 
-# descomenta la siguiente línea para migrar a todos los inquilinos:
-# php artisan tenants:artisan "migrate --force"
-
-# 2. Limpiar cachés para evitar errores de vistas viejas
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-# 3. Iniciar PHP-FPM en segundo plano
-php-fpm -D
+# 2. ¡EL TRUCO SENIOR! Devolver la propiedad de los archivos generados al usuario web
+chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# 4. Iniciar Nginx en primer plano (mantiene el contenedor vivo)
+# 3. Iniciar servicios
+php-fpm -D
 nginx -g "daemon off;"
