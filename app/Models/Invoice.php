@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Invoice extends Model
 {
@@ -14,6 +15,7 @@ class Invoice extends Model
         'facturama_id', // <-- Añadido
         'company_id', 'client_id', 'uuid', 'folio', 'series', 
         'subtotal', 'taxes', 'total', 'status', 'items',
+        'payment_method',
     ];
 
     protected $casts = [
