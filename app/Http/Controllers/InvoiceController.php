@@ -152,6 +152,7 @@ class InvoiceController extends Controller
                 'subtotal' => $totals['subtotal'],
                 'taxes' => $totals['total_traslados'] - $totals['total_retenciones'],
                 'total' => $totals['total'], 'status' => 'issued', 'items' => $items,
+                'payment_method' => $validated['payment_method'],
             ]);
 
             return redirect()->route('invoices.index', ['company_id' => $company->id])

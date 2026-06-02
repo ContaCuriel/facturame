@@ -41,6 +41,7 @@
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cliente</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fecha</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Total</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Método</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estado</th>
                                 <th class="relative px-6 py-3"><span class="sr-only">Acciones</span></th>
                             </tr>
@@ -55,25 +56,43 @@
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{{ $invoice->client->name ?? 'N/A' }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{{ $invoice->created_at->format('d/m/Y') }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">${{ number_format($invoice->total, 2) }}</td>
+                                    
+                                    {{-- ✅ ETIQUETA VISUAL PPD O PUE ✅ --}}
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                        @if($invoice->payment_method === 'PPD')
+                                            <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-bold border border-yellow-200">PPD (Crédito)</span>
+                                        @elseif($invoice->payment_method === 'PUE')
+                                            <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold border border-green-200">PUE (Pagado)</span>
+                                        @else
+                                            <span class="text-gray-500 text-xs italic">Histórica</span>
+                                        @endif
+                                    </td>
+
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $invoice->status === 'issued' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
                                             {{ ucfirst($invoice->status) }}
                                         </span>
                                     </td>
+                                    
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        {{-- ✅ --- BOTONES DE ACCIÓN ACTUALIZADOS --- ✅ --}}
                                         <div class="flex justify-end items-center space-x-4">
                                             <a href="{{ route('invoices.pdf', $invoice) }}" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900">PDF</a>
                                             <a href="{{ route('invoices.xml', $invoice) }}" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900">XML</a>
                                             <button @click="emailModalOpen = true; emailActionUrl = '{{ route('invoices.email', $invoice) }}'; recipientEmail = '{{ $invoice->client->email ?? '' }}'" class="text-green-600 dark:text-green-400 hover:text-green-900">Enviar</button>
+                                            
                                             @if($invoice->status === 'issued')
-                                            <button @click="cancelModalOpen = true; cancelActionUrl = '{{ route('invoices.cancel', $invoice) }}'" class="text-red-600 dark:text-red-400 hover:text-red-900">Cancelar</button>
+                                                {{-- ✅ BOTÓN DE PAGOS (SOLO PARA PPD) ✅ --}}
+                                                @if($invoice->payment_method === 'PPD')
+                                                    <a href="#" onclick="alert('Pantalla de pagos en construcción. ¡Pronto programaremos la Fase 3!')" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 font-bold">Pagos</a>
+                                                @endif
+
+                                                <button @click="cancelModalOpen = true; cancelActionUrl = '{{ route('invoices.cancel', $invoice) }}'" class="text-red-600 dark:text-red-400 hover:text-red-900">Cancelar</button>
                                             @endif
                                         </div>
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">No hay facturas emitidas.</td></tr>
+                                <tr><td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">No hay facturas emitidas.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -111,7 +130,7 @@
             </div>
         </div>
 
-        {{-- ✅ --- NUEVA VENTANA MODAL DE ENVÍO POR CORREO --- ✅ --}}
+        <!-- Ventana Modal de Envío por Correo -->
         <div x-show="emailModalOpen" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30" style="display: none;">
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg" @click.away="emailModalOpen = false">
                 <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200">Enviar Factura por Correo</h3>
@@ -130,4 +149,3 @@
         </div>
     </div>
 </x-company-panel-layout>
-
