@@ -10,7 +10,7 @@
         </div>
         <a href="{{ route('invoices.index', ['company_id' => $invoice->company_id]) }}" class="px-4 py-2 bg-gray-600 text-white rounded-md text-sm hover:bg-gray-700">
             Volver a Facturas
-        <   /a>
+        </a>
     </div>
 
     @if (session('success'))
