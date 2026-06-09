@@ -49,7 +49,7 @@ class ClientController extends Controller
         $validatedData = $request->validate([
             'company_id' => 'required|exists:companies,id',
             'name' => 'required|string|max:255',
-            'rfc' => 'required|string|size:13',
+            'rfc' => 'required|string|min:12|max:13',
             'fiscal_regime' => 'required|string',
             'zip_code' => 'required|string|digits:5',
             'commercial_name' => 'nullable|string|max:255',
@@ -103,7 +103,7 @@ class ClientController extends Controller
 
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
-            'rfc' => 'required|string|size:13|unique:clients,rfc,' . $client->id,
+            'rfc' => 'required|string|min:12|max:13|unique:clients,rfc,' . $client->id,
             'fiscal_regime' => 'required|string',
             'zip_code' => 'required|string|digits:5',
             'commercial_name' => 'nullable|string|max:255',
