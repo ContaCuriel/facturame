@@ -83,7 +83,7 @@
                                             @if($invoice->status === 'issued')
                                                 {{-- ✅ BOTÓN DE PAGOS (SOLO PARA PPD) ✅ --}}
                                                 @if($invoice->payment_method === 'PPD')
-                                                    <a href="#" onclick="alert('Pantalla de pagos en construcción. ¡Pronto programaremos la Fase 3!')" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 font-bold">Pagos</a>
+                                                    <a href="{{ route('payments.index', $invoice) }}" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 font-bold">Pagos</a>
                                                 @endif
 
                                                 <button @click="cancelModalOpen = true; cancelActionUrl = '{{ route('invoices.cancel', $invoice) }}'" class="text-red-600 dark:text-red-400 hover:text-red-900">Cancelar</button>

@@ -59,6 +59,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/invoices/{invoice}/xml', [InvoiceController::class, 'downloadXml'])->name('invoices.xml');
     Route::delete('/invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
     Route::post('/invoices/{invoice}/send-email', [InvoiceController::class, 'sendByEmail'])->name('invoices.email');
+    Route::get('/invoices/{invoice}/payments', [\App\Http\Controllers\PaymentController::class, 'index'])->name('payments.index');
+Route::post('/invoices/{invoice}/payments', [\App\Http\Controllers\PaymentController::class, 'store'])->name('payments.store');
 });
 
 require __DIR__.'/auth.php';
