@@ -65,8 +65,10 @@ class PaymentController extends Controller
             $taxObject = '02'; 
             $taxRate = 0.160000; 
             
-            $basePaid = round($amountPaid / (1 + $taxRate), 2);
-            $taxPaid = round($amountPaid - $basePaid, 2);
+            // 1. Calculamos el IVA primero y lo redondeamos a 2 decimales
+            $taxPaid = round($amountPaid - ($amountPaid / (1 + $taxRate)), 2);
+            // 2. La Base es el monto neto menos el IVA exacto redondeado (así nunca falla la suma)
+            $basePaid = round($amountPaid - $taxPaid, 2);
 
             $taxesNode = [
                 [
