@@ -53,6 +53,32 @@ class FacturamaService
             ->get($this->apiUrl . $endpoint);
     }
 
+    // ✅ --- NUEVAS FUNCIONES DE DESCARGA PARA REP --- ✅
+    public function getInvoicePdf(string $facturamaId)
+    {
+        $response = $this->getInvoiceFile($facturamaId, 'pdf');
+        
+        if ($response->failed()) {
+            throw new \Exception('Error al descargar de Facturama: ' . $response->body());
+        }
+        
+        // Facturama nos manda un JSON con el archivo dentro de la palabra "Content"
+        return $response->json('Content');
+    }
+
+    public function getInvoiceXml(string $facturamaId)
+    {
+        $response = $this->getInvoiceFile($facturamaId, 'xml');
+        
+        if ($response->failed()) {
+            throw new \Exception('Error al descargar de Facturama: ' . $response->body());
+        }
+        
+        // El XML lo decodificamos desde aquí para que el controlador lo descargue como texto plano
+        return base64_decode($response->json('Content'));
+    }
+    // ✅ ---------------------------------------------- ✅
+
     /**
      * Envía una factura por correo electrónico, ahora con parámetros en la URL.
      */
