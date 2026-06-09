@@ -37,7 +37,43 @@ class PaymentController extends Controller
 
     public function store(Request $request, Invoice $invoice)
     {
-        // Aquí programaremos el timbrado del REP más adelante. 
-        // Por ahora lo dejamos preparado.
+        // 1. Validación de seguridad
+        $this->authorize('update', $invoice->company);
+
+        $validated = $request->validate([
+            'payment_date' => 'required|date',
+            'payment_form' => 'required|string',
+            'amount' => 'required|numeric|min:0.01',
+        ]);
+
+        // 2. Cálculos matemáticos de los saldos
+        $payments = $invoice->payments()->get();
+        $totalPaid = $payments->sum('amount');
+        $previousBalance = $invoice->total - $totalPaid;
+        
+        // Bloqueo: Evitar que paguen más de lo que deben
+        if ($validated['amount'] > $previousBalance) {
+            return back()->with('error', 'El monto no puede ser mayor al saldo pendiente ($' . number_format($previousBalance, 2) . ')');
+        }
+
+        $outstandingBalance = $previousBalance - $validated['amount'];
+        $installmentNumber = $payments->count() + 1;
+
+        // 3. Ajuste de fecha (Le agregamos las 12:00:00 hrs por defecto para cumplir con el SAT)
+        $paymentDate = $validated['payment_date'] . ' 12:00:00';
+
+        // 4. Guardar en la base de datos local
+        Payment::create([
+            'invoice_id' => $invoice->id,
+            'payment_date' => $paymentDate,
+            'payment_form' => $validated['payment_form'],
+            'amount' => $validated['amount'],
+            'installment_number' => $installmentNumber,
+            'previous_balance' => $previousBalance,
+            'outstanding_balance' => $outstandingBalance,
+            'status' => 'pending', // Lo dejamos como pendiente hasta que programemos Facturama
+        ]);
+
+        return back()->with('success', 'Pago #' . $installmentNumber . ' registrado localmente. Saldo actualizado.');
     }
 }

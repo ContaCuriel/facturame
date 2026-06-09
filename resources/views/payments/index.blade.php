@@ -44,9 +44,9 @@
                     @csrf
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div>
-                            <label class="block font-medium text-sm text-gray-700 dark:text-gray-300">Fecha del Pago*</label>
-                            <input type="datetime-local" name="payment_date" class="block mt-1 w-full rounded-md shadow-sm border-gray-300 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-300" required>
-                        </div>
+    <label class="block font-medium text-sm text-gray-700 dark:text-gray-300">Fecha del Pago*</label>
+    <input type="date" name="payment_date" class="block mt-1 w-full rounded-md shadow-sm border-gray-300 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-300" required>
+</div>
                         <div>
                             <label class="block font-medium text-sm text-gray-700 dark:text-gray-300">Forma de Pago*</label>
                             <select name="payment_form" class="block mt-1 w-full rounded-md shadow-sm border-gray-300 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-300" required>
