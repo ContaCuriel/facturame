@@ -43,7 +43,6 @@ class PaymentController extends Controller
         $company = $invoice->company;
         $client = $invoice->client;
 
-        // 1. Matemáticas de Saldos
         $payments = $invoice->payments()->get();
         $totalPaid = $payments->sum('amount');
         $previousBalance = $invoice->total - $totalPaid;
@@ -59,16 +58,13 @@ class PaymentController extends Controller
         $paymentDateFacturama = $validated['payment_date'] . 'T12:00:00';
         $paymentDateDB = $validated['payment_date'] . ' 12:00:00';
 
-        // 2. Cálculos Automáticos de IVA (Al estilo CONTPAQi)
-        $taxObject = '01'; // Por defecto: No objeto de impuesto
+        $taxObject = '01'; 
         $taxesNode = null;
 
-        // Si la factura original tenía impuestos registrados, calculamos la proporción
         if ($invoice->taxes > 0) {
-            $taxObject = '02'; // Sí objeto de impuesto
-            $taxRate = 0.160000; // Tasa de IVA estándar 16%
+            $taxObject = '02'; 
+            $taxRate = 0.160000; 
             
-            // Calculamos la base y el IVA de este abono específico
             $basePaid = round($amountPaid / (1 + $taxRate), 2);
             $taxPaid = round($amountPaid - $basePaid, 2);
 
@@ -83,7 +79,7 @@ class PaymentController extends Controller
             ];
         }
 
-        // 3. Construcción del Documento Relacionado
+        // CORRECCIÓN 1: Ajuste de variables al Spanglish de Facturama
         $relatedDocument = [
             'Uuid' => $invoice->uuid,
             'Serie' => $invoice->series,
@@ -91,19 +87,17 @@ class PaymentController extends Controller
             'Currency' => 'MXN',
             'ExchangeRate' => 1,
             'PaymentMethod' => 'PPD',
-            'InstallmentNumber' => $installmentNumber,
+            'PartialityNumber' => (string)$installmentNumber, // <-- Corregido
             'PreviousBalanceAmount' => round($previousBalance, 2),
             'AmountPaid' => $amountPaid,
-            'OutstandingBalanceAmount' => round($outstandingBalance, 2),
+            'ImpSaldoInsoluto' => round($outstandingBalance, 2), // <-- Corregido
             'TaxObject' => $taxObject,
         ];
 
-        // Si hay impuestos proporcionales, se los inyectamos al arreglo
         if ($taxesNode) {
             $relatedDocument['Taxes'] = $taxesNode;
         }
 
-        // 4. Construcción del JSON principal para Facturama
         $facturamaData = [
             'Folio' => (string)$installmentNumber,
             'Serie' => 'REP',
@@ -121,7 +115,8 @@ class PaymentController extends Controller
                 'FiscalRegime' => $client->fiscal_regime,
                 'TaxZipCode' => $client->zip_code,
             ],
-            'Complement' => [
+            // CORRECCIÓN 2: "Complemento" en lugar de "Complement"
+            'Complemento' => [
                 'Payments' => [
                     [
                         'Date' => $paymentDateFacturama,
@@ -134,7 +129,6 @@ class PaymentController extends Controller
             ]
         ];
 
-        // 5. Timbrado Oficial
         $response = $facturama->createInvoice($facturamaData);
 
         if ($response->failed()) {
@@ -143,10 +137,10 @@ class PaymentController extends Controller
         }
 
         $facturaResult = $response->json();
-        $repUuid = data_get($facturaResult, 'Complement.TaxStamp.Uuid');
+        // Facturama a veces devuelve "Complement" en la respuesta, así que nos aseguramos de cachar ambos
+        $repUuid = data_get($facturaResult, 'Complement.TaxStamp.Uuid') ?? data_get($facturaResult, 'Complemento.TaxStamp.Uuid');
         $facturamaId = data_get($facturaResult, 'Id');
 
-        // 6. Guardado Local
         Payment::create([
             'invoice_id' => $invoice->id,
             'payment_date' => $paymentDateDB,
