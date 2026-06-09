@@ -6,7 +6,6 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\FacturamaService;
 use Illuminate\Http\Request;
-use Illuminate\Foundation\Auth\Access\AccessDeniedException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Storage;
 
@@ -64,8 +63,10 @@ class PaymentController extends Controller
 
         $taxObject = '01'; 
         $taxesNode = [];
+        $transfers = [];
+        $retentions = [];
 
-        // 🧮 ALGORITMO PROPORCIONAL MULTI-IMPUESTOS (Tipos nativos numéricos)
+        // 🧮 ALGORITMO PROPORCIONAL MULTI-IMPUESTOS SAT REP 2.0
         $proportion = $amountPaid / $invoice->total;
 
         // 1. Si la factura original tiene IVA Trasladado
@@ -74,12 +75,12 @@ class PaymentController extends Controller
             $taxPaid = round($invoice->taxes * $proportion, 2);
             $basePaid = round($invoice->subtotal * $proportion, 2);
 
-            $taxesNode[] = [
-                'Name' => 'IVA',
-                'Rate' => 0.160000,
-                'Total' => $taxPaid,
+            $transfers[] = [
                 'Base' => $basePaid,
-                'IsRetention' => false // <-- Booleano puro
+                'Tax' => '002',
+                'FactorType' => 'Tasa',
+                'Rate' => 0.160000,
+                'Amount' => $taxPaid
             ];
         }
 
@@ -92,13 +93,20 @@ class PaymentController extends Controller
             $baseIsrPaid = round($invoice->subtotal * $proportion, 2);
             $isrRate = round($originalIsr / $invoice->subtotal, 6);
 
-            $taxesNode[] = [
-                'Name' => 'ISR',
-                'Rate' => $isrRate,
-                'Total' => $isrPaid,
+            $retentions[] = [
                 'Base' => $baseIsrPaid,
-                'IsRetention' => true // <-- Booleano puro
+                'Tax' => '001',
+                'FactorType' => 'Tasa',
+                'Rate' => $isrRate,
+                'Amount' => $isrPaid
             ];
+        }
+
+        if (!empty($transfers)) {
+            $taxesNode['Transfers'] = $transfers;
+        }
+        if (!empty($retentions)) {
+            $taxesNode['Retentions'] = $retentions;
         }
 
         $relatedDocument = [
@@ -148,7 +156,8 @@ class PaymentController extends Controller
                     'Total' => 0,
                 ]
             ],
-            'Complemento' => [
+            // 🛠️ CORRECCIÓN CLAVE: Cambiado a 'Complement' (Inglés) para que la API lo reconozca
+            'Complement' => [
                 'Payments' => [
                     [
                         'Date' => $paymentDateFacturama,
