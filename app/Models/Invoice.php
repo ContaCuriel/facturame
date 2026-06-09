@@ -32,4 +32,9 @@ class Invoice extends Model
     {
         return $this->belongsTo(Company::class);
     }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
 }
