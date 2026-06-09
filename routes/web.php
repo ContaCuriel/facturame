@@ -63,6 +63,7 @@ Route::middleware('auth')->group(function () {
 Route::post('/invoices/{invoice}/payments', [\App\Http\Controllers\PaymentController::class, 'store'])->name('payments.store');
 Route::get('/payments/{payment}/pdf', [\App\Http\Controllers\PaymentController::class, 'downloadPdf'])->name('payments.pdf');
 Route::get('/payments/{payment}/xml', [\App\Http\Controllers\PaymentController::class, 'downloadXml'])->name('payments.xml');
+Route::post('/payments/{payment}/email', [\App\Http\Controllers\PaymentController::class, 'sendEmail'])->name('payments.email');
 });
 
 require __DIR__.'/auth.php';

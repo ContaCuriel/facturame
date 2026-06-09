@@ -193,4 +193,31 @@ class PaymentController extends Controller
             return back()->with('error', 'No se pudo descargar el XML: ' . $e->getMessage());
         }
     }
+    public function sendEmail(Payment $payment, FacturamaService $facturama)
+    {
+        $this->authorize('view', $payment->invoice->company);
+
+        // Obtenemos el correo del cliente relacionado a esta factura
+        $email = $payment->invoice->client->email;
+
+        if (!$email) {
+            return back()->with('error', 'El cliente no tiene un correo electrónico registrado.');
+        }
+
+        try {
+            $subject = "Comprobante de Pago REP - " . $payment->invoice->company->name;
+            $comments = "Adjunto enviamos su comprobante de pago correspondiente a la factura " . $payment->invoice->series . "-" . $payment->invoice->folio;
+            
+            $response = $facturama->sendInvoiceByEmail($payment->facturama_id, $email, $subject, $comments);
+
+            if ($response->failed()) {
+                throw new \Exception('Facturama rechazó el envío: ' . $response->body());
+            }
+
+            return back()->with('success', '¡Comprobante enviado exitosamente a ' . $email . '!');
+
+        } catch (\Throwable $e) {
+            return back()->with('error', 'No se pudo enviar el correo: ' . $e->getMessage());
+        }
+    }
 }

@@ -123,6 +123,12 @@
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <a href="{{ route('payments.pdf', $payment) }}" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 mr-3 font-bold">PDF</a>
 <a href="{{ route('payments.xml', $payment) }}" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 font-bold">XML</a>
+<form action="{{ route('payments.email', $payment) }}" method="POST" class="inline-block" onsubmit="return confirm('¿Enviar este comprobante al cliente por correo?');">
+        @csrf
+        <button type="submit" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 font-bold">
+            Enviar
+        </button>
+    </form>
                                 </td>
                             </tr>
                         @empty
