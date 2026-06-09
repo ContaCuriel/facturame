@@ -121,8 +121,8 @@
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">${{ number_format($payment->amount, 2) }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{{ $payment->uuid }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <a href="#" onclick="alert('Próximamente: Descargar PDF')" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 mr-3 font-bold">PDF</a>
-                                    <a href="#" onclick="alert('Próximamente: Descargar XML')" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 font-bold">XML</a>
+                                    <a href="{{ route('payments.pdf', $payment) }}" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 mr-3 font-bold">PDF</a>
+<a href="{{ route('payments.xml', $payment) }}" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 font-bold">XML</a>
                                 </td>
                             </tr>
                         @empty

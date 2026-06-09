@@ -156,4 +156,41 @@ class PaymentController extends Controller
 
         return back()->with('success', '¡Pago Timbrado con Éxito! UUID: ' . $repUuid);
     }
+
+    public function downloadPdf(Payment $payment, FacturamaService $facturama)
+    {
+        // Seguridad: Verificar permisos sobre la empresa de la factura
+        $this->authorize('view', $payment->invoice->company);
+
+        try {
+            // Bajamos el PDF usando el ID de Facturama que guardamos
+            $pdfBase64 = $facturama->getInvoicePdf($payment->facturama_id);
+            $pdfContent = base64_decode($pdfBase64);
+
+            return response($pdfContent, 200)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'attachment; filename="REP-' . $payment->id . '.pdf"');
+
+        } catch (\Throwable $e) {
+            return back()->with('error', 'No se pudo descargar el PDF: ' . $e->getMessage());
+        }
+    }
+
+    public function downloadXml(Payment $payment, FacturamaService $facturama)
+    {
+        // Seguridad: Verificar permisos sobre la empresa de la factura
+        $this->authorize('view', $payment->invoice->company);
+
+        try {
+            // Bajamos el XML en formato cadena/texto
+            $xmlString = $facturama->getInvoiceXml($payment->facturama_id);
+
+            return response($xmlString, 200)
+                ->header('Content-Type', 'text/xml')
+                ->header('Content-Disposition', 'attachment; filename="REP-' . $payment->id . '.xml"');
+
+        } catch (\Throwable $e) {
+            return back()->with('error', 'No se pudo descargar el XML: ' . $e->getMessage());
+        }
+    }
 }
