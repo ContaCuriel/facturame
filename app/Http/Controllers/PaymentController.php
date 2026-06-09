@@ -23,9 +23,11 @@ class PaymentController extends Controller
 
         $payments = $invoice->payments()->latest()->get();
 
-        $totalPaid = $payments->sum('amount');
+        // MATEMÁTICAS: Solo sumamos los pagos que NO estén cancelados
+        $totalPaid = $payments->where('status', '!=', 'cancelled')->sum('amount');
         $outstandingBalance = $invoice->total - $totalPaid;
-        $nextInstallment = $payments->count() + 1;
+        
+        $nextInstallment = $payments->where('status', '!=', 'cancelled')->count() + 1;
 
         return view('payments.index', compact('invoice', 'payments', 'totalPaid', 'outstandingBalance', 'nextInstallment'));
     }
@@ -44,7 +46,7 @@ class PaymentController extends Controller
         $client = $invoice->client;
 
         $payments = $invoice->payments()->get();
-        $totalPaid = $payments->sum('amount');
+        $totalPaid = $payments->where('status', '!=', 'cancelled')->sum('amount');
         $previousBalance = $invoice->total - $totalPaid;
         
         if ($validated['amount'] > $previousBalance) {
@@ -52,7 +54,7 @@ class PaymentController extends Controller
         }
 
         $outstandingBalance = $previousBalance - $validated['amount'];
-        $installmentNumber = $payments->count() + 1;
+        $installmentNumber = $payments->where('status', '!=', 'cancelled')->count() + 1;
         $amountPaid = round($validated['amount'], 2);
         
         $paymentDateFacturama = $validated['payment_date'] . 'T12:00:00';
@@ -65,23 +67,21 @@ class PaymentController extends Controller
             $taxObject = '02'; 
             $taxRate = 0.160000; 
             
-            // 1. Calculamos el IVA primero y lo redondeamos a 2 decimales
+            // Algoritmo preciso de cálculo de IVA para evitar descuadres de centavos
             $taxPaid = round($amountPaid - ($amountPaid / (1 + $taxRate)), 2);
-            // 2. La Base es el monto neto menos el IVA exacto redondeado (así nunca falla la suma)
             $basePaid = round($amountPaid - $taxPaid, 2);
 
             $taxesNode = [
                 [
                     'Name' => 'IVA',
-                    'Rate' => $taxRate,
-                    'Total' => $taxPaid,
-                    'Base' => $basePaid,
-                    'IsRetention' => false
+                    'Rate' => (string)$taxRate,
+                    'Total' => (string)$taxPaid,
+                    'Base' => (string)$basePaid,
+                    'IsRetention' => 'false'
                 ]
             ];
         }
 
-        // CORRECCIÓN 1: Ajuste de variables al Spanglish de Facturama
         $relatedDocument = [
             'Uuid' => $invoice->uuid,
             'Serie' => $invoice->series,
@@ -89,10 +89,10 @@ class PaymentController extends Controller
             'Currency' => 'MXN',
             'ExchangeRate' => 1,
             'PaymentMethod' => 'PPD',
-            'PartialityNumber' => (string)$installmentNumber, // <-- Corregido
-            'PreviousBalanceAmount' => round($previousBalance, 2),
-            'AmountPaid' => $amountPaid,
-            'ImpSaldoInsoluto' => round($outstandingBalance, 2), // <-- Corregido
+            'PartialityNumber' => (string)$installmentNumber,
+            'PreviousBalanceAmount' => (string)round($previousBalance, 2),
+            'AmountPaid' => (string)$amountPaid,
+            'ImpSaldoInsoluto' => (string)round($outstandingBalance, 2),
             'TaxObject' => $taxObject,
         ];
 
@@ -117,7 +117,19 @@ class PaymentController extends Controller
                 'FiscalRegime' => $client->fiscal_regime,
                 'TaxZipCode' => $client->zip_code,
             ],
-            // CORRECCIÓN 2: "Complemento" en lugar de "Complement"
+            // 🛠️ INYECTAMOS EL CONCEPTO EXPLÍCITO PARA DETENER EL BUG DE AUTO-GENERACIÓN DE FACTURAMA
+            'Items' => [
+                [
+                    'ProductCode' => '84111506',
+                    'Quantity' => 1,
+                    'UnitCode' => 'ACT',
+                    'Description' => 'Pago',
+                    'UnitPrice' => 0,
+                    'Subtotal' => 0,
+                    'TaxObject' => '01',
+                    'Total' => 0,
+                ]
+            ],
             'Complemento' => [
                 'Payments' => [
                     [
@@ -135,11 +147,10 @@ class PaymentController extends Controller
 
         if ($response->failed()) {
             $error = $response->json();
-            return back()->with('error', 'Error de Facturama: ' . ($error['message'] ?? json_encode($error)))->withInput();
+            return back()->with('error', 'Error de Facturama: ' . ($error['message'] ?? $error['Message'] ?? json_encode($error)))->withInput();
         }
 
         $facturaResult = $response->json();
-        // Facturama a veces devuelve "Complement" en la respuesta, así que nos aseguramos de cachar ambos
         $repUuid = data_get($facturaResult, 'Complement.TaxStamp.Uuid') ?? data_get($facturaResult, 'Complemento.TaxStamp.Uuid');
         $facturamaId = data_get($facturaResult, 'Id');
 
@@ -161,18 +172,13 @@ class PaymentController extends Controller
 
     public function downloadPdf(Payment $payment, FacturamaService $facturama)
     {
-        // Seguridad: Verificar permisos sobre la empresa de la factura
         $this->authorize('view', $payment->invoice->company);
-
         try {
-            // Bajamos el PDF usando el ID de Facturama que guardamos
             $pdfBase64 = $facturama->getInvoicePdf($payment->facturama_id);
             $pdfContent = base64_decode($pdfBase64);
-
             return response($pdfContent, 200)
                 ->header('Content-Type', 'application/pdf')
                 ->header('Content-Disposition', 'attachment; filename="REP-' . $payment->id . '.pdf"');
-
         } catch (\Throwable $e) {
             return back()->with('error', 'No se pudo descargar el PDF: ' . $e->getMessage());
         }
@@ -180,46 +186,49 @@ class PaymentController extends Controller
 
     public function downloadXml(Payment $payment, FacturamaService $facturama)
     {
-        // Seguridad: Verificar permisos sobre la empresa de la factura
         $this->authorize('view', $payment->invoice->company);
-
         try {
-            // Bajamos el XML en formato cadena/texto
             $xmlString = $facturama->getInvoiceXml($payment->facturama_id);
-
             return response($xmlString, 200)
                 ->header('Content-Type', 'text/xml')
                 ->header('Content-Disposition', 'attachment; filename="REP-' . $payment->id . '.xml"');
-
         } catch (\Throwable $e) {
             return back()->with('error', 'No se pudo descargar el XML: ' . $e->getMessage());
         }
     }
+
     public function sendEmail(Payment $payment, FacturamaService $facturama)
     {
         $this->authorize('view', $payment->invoice->company);
-
-        // Obtenemos el correo del cliente relacionado a esta factura
         $email = $payment->invoice->client->email;
-
-        if (!$email) {
-            return back()->with('error', 'El cliente no tiene un correo electrónico registrado.');
-        }
+        if (!$email) return back()->with('error', 'El cliente no tiene un correo electrónico registrado.');
 
         try {
             $subject = "Comprobante de Pago REP - " . $payment->invoice->company->name;
             $comments = "Adjunto enviamos su comprobante de pago correspondiente a la factura " . $payment->invoice->series . "-" . $payment->invoice->folio;
-            
             $response = $facturama->sendInvoiceByEmail($payment->facturama_id, $email, $subject, $comments);
 
-            if ($response->failed()) {
-                throw new \Exception('Facturama rechazó el envío: ' . $response->body());
-            }
-
+            if ($response->failed()) throw new \Exception('Facturama rechazó el envío: ' . $response->body());
             return back()->with('success', '¡Comprobante enviado exitosamente a ' . $email . '!');
-
         } catch (\Throwable $e) {
             return back()->with('error', 'No se pudo enviar el correo: ' . $e->getMessage());
         }
+    }
+
+    public function cancel(Request $request, Payment $payment, FacturamaService $facturama)
+    {
+        $this->authorize('update', $payment->invoice->company);
+        $motive = '02'; 
+
+        $response = $facturama->cancelInvoice($payment->facturama_id, $motive);
+
+        if ($response->failed()) {
+            $errorData = $response->json();
+            $errorMessage = $errorData['Message'] ?? $errorData['message'] ?? $response->body();
+            return back()->with('error', 'Error al cancelar en el SAT: ' . $errorMessage);
+        }
+
+        $payment->update(['status' => 'cancelled']);
+        return back()->with('success', '¡Pago cancelado exitosamente en el SAT! El saldo de la factura ha sido restaurado.');
     }
 }
