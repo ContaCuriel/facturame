@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Services\FacturamaService;
 use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Facades\Storage;
 
 class PaymentController extends Controller
 {
@@ -61,24 +62,41 @@ class PaymentController extends Controller
         $paymentDateDB = $validated['payment_date'] . ' 12:00:00';
 
         $taxObject = '01'; 
-        $taxesNode = null;
+        $taxesNode = [];
 
+        // 🧮 ALGORITMO PROPORCIONAL MULTI-IMPUESTOS (Saca la proporción exacta del pago)
+        $proportion = $amountPaid / $invoice->total;
+
+        // 1. Si la factura original tiene IVA Trasladado
         if ($invoice->taxes > 0) {
             $taxObject = '02'; 
-            $taxRate = 0.160000; 
-            
-            // Algoritmo preciso de cálculo de IVA para evitar descuadres de centavos
-            $taxPaid = round($amountPaid - ($amountPaid / (1 + $taxRate)), 2);
-            $basePaid = round($amountPaid - $taxPaid, 2);
+            $taxPaid = round($invoice->taxes * $proportion, 2);
+            $basePaid = round($invoice->subtotal * $proportion, 2);
 
-            $taxesNode = [
-                [
-                    'Name' => 'IVA',
-                    'Rate' => (string)$taxRate,
-                    'Total' => (string)$taxPaid,
-                    'Base' => (string)$basePaid,
-                    'IsRetention' => 'false'
-                ]
+            $taxesNode[] = [
+                'Name' => 'IVA',
+                'Rate' => '0.160000',
+                'Total' => (string)$taxPaid,
+                'Base' => (string)$basePaid,
+                'IsRetention' => 'false'
+            ];
+        }
+
+        // 2. Si la factura original tiene Retención de ISR
+        $originalIsr = $invoice->isr_retention ?? $invoice->isr ?? 0;
+
+        if ($originalIsr > 0) {
+            $taxObject = '02';
+            $isrPaid = round($originalIsr * $proportion, 2);
+            $baseIsrPaid = round($invoice->subtotal * $proportion, 2);
+            $isrRate = round($originalIsr / $invoice->subtotal, 6);
+
+            $taxesNode[] = [
+                'Name' => 'ISR',
+                'Rate' => (string)$isrRate,
+                'Total' => (string)$isrPaid,
+                'Base' => (string)$baseIsrPaid,
+                'IsRetention' => 'true'
             ];
         }
 
@@ -96,7 +114,7 @@ class PaymentController extends Controller
             'TaxObject' => $taxObject,
         ];
 
-        if ($taxesNode) {
+        if (!empty($taxesNode)) {
             $relatedDocument['Taxes'] = $taxesNode;
         }
 
@@ -117,7 +135,6 @@ class PaymentController extends Controller
                 'FiscalRegime' => $client->fiscal_regime,
                 'TaxZipCode' => $client->zip_code,
             ],
-            // 🛠️ INYECTAMOS EL CONCEPTO EXPLÍCITO PARA DETENER EL BUG DE AUTO-GENERACIÓN DE FACTURAMA
             'Items' => [
                 [
                     'ProductCode' => '84111506',
@@ -142,6 +159,11 @@ class PaymentController extends Controller
                 ]
             ]
         ];
+
+        // 🖼️ INYECTAMOS EL LOGO AL COMPLEMENTO DE PAGO
+        if ($company->logo_path) {
+            $facturamaData['LogoUrl'] = url(Storage::url($company->logo_path));
+        }
 
         $response = $facturama->createInvoice($facturamaData);
 
