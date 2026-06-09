@@ -6,6 +6,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\FacturamaService;
 use Illuminate\Http\Request;
+use Illuminate\Foundation\Auth\Access\AccessDeniedException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Storage;
 
@@ -64,7 +65,7 @@ class PaymentController extends Controller
         $taxObject = '01'; 
         $taxesNode = [];
 
-        // 🧮 ALGORITMO PROPORCIONAL MULTI-IMPUESTOS (Saca la proporción exacta del pago)
+        // 🧮 ALGORITMO PROPORCIONAL MULTI-IMPUESTOS (Tipos nativos numéricos)
         $proportion = $amountPaid / $invoice->total;
 
         // 1. Si la factura original tiene IVA Trasladado
@@ -75,10 +76,10 @@ class PaymentController extends Controller
 
             $taxesNode[] = [
                 'Name' => 'IVA',
-                'Rate' => '0.160000',
-                'Total' => (string)$taxPaid,
-                'Base' => (string)$basePaid,
-                'IsRetention' => 'false'
+                'Rate' => 0.160000,
+                'Total' => $taxPaid,
+                'Base' => $basePaid,
+                'IsRetention' => false // <-- Booleano puro
             ];
         }
 
@@ -93,10 +94,10 @@ class PaymentController extends Controller
 
             $taxesNode[] = [
                 'Name' => 'ISR',
-                'Rate' => (string)$isrRate,
-                'Total' => (string)$isrPaid,
-                'Base' => (string)$baseIsrPaid,
-                'IsRetention' => 'true'
+                'Rate' => $isrRate,
+                'Total' => $isrPaid,
+                'Base' => $baseIsrPaid,
+                'IsRetention' => true // <-- Booleano puro
             ];
         }
 
@@ -108,9 +109,9 @@ class PaymentController extends Controller
             'ExchangeRate' => 1,
             'PaymentMethod' => 'PPD',
             'PartialityNumber' => (string)$installmentNumber,
-            'PreviousBalanceAmount' => (string)round($previousBalance, 2),
-            'AmountPaid' => (string)$amountPaid,
-            'ImpSaldoInsoluto' => (string)round($outstandingBalance, 2),
+            'PreviousBalanceAmount' => round($previousBalance, 2),
+            'AmountPaid' => $amountPaid,
+            'ImpSaldoInsoluto' => round($outstandingBalance, 2),
             'TaxObject' => $taxObject,
         ];
 
@@ -160,7 +161,6 @@ class PaymentController extends Controller
             ]
         ];
 
-        // 🖼️ INYECTAMOS EL LOGO AL COMPLEMENTO DE PAGO
         if ($company->logo_path) {
             $facturamaData['LogoUrl'] = url(Storage::url($company->logo_path));
         }
