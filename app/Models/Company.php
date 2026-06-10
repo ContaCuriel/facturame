@@ -11,40 +11,40 @@ class Company extends Model
 {
     use HasFactory;
 
-    /**
-     * Los atributos que se pueden asignar en masa.
-     */
     protected $fillable = [
         'name',
         'commercial_name',
         'logo_path',
         'rfc',
         'fiscal_regime',
-        'zip_code', // <-- LA COMA FALTABA AQUÍ
+        'zip_code',
         'csd_cer_path',
         'csd_key_path',
         'csd_password',
+        // Nuevos campos para e.firma y caducidades
+        'fiel_cer_path',
+        'fiel_key_path',
+        'fiel_password',
+        'csd_expires_at',
+        'fiel_expires_at',
     ];
 
-    /**
-     * Encripta la contraseña del CSD antes de guardarla.
-     */
+    // Encriptación automática de contraseñas al guardarse en la BD
     protected function setCsdPasswordAttribute($value)
     {
-        $this->attributes['csd_password'] = Crypt::encryptString($value);
+        $this->attributes['csd_password'] = $value ? Crypt::encryptString($value) : null;
     }
 
-    /**
-     * Define la relación donde una Empresa puede tener muchos Clientes.
-     */
+    protected function setFielPasswordAttribute($value)
+    {
+        $this->attributes['fiel_password'] = $value ? Crypt::encryptString($value) : null;
+    }
+
     public function clients(): HasMany
     {
         return $this->hasMany(Client::class);
     }
 
-    /**
-     * Define la relación donde una Empresa puede tener muchos Productos.
-     */
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);

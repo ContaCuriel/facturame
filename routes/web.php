@@ -44,6 +44,7 @@ Route::middleware('auth')->group(function () {
     // Rutas de Configuración
     Route::get('/companies/{company}/csd', [CompanyController::class, 'showCsdForm'])->name('companies.csd.form');
     Route::post('/companies/{company}/csd', [CompanyController::class, 'storeCsd'])->name('companies.csd.store');
+    Route::post('/companies/{company}/fiel', [App\Http\Controllers\CompanyController::class, 'storeFiel'])->name('companies.fiel.store');
     Route::get('/companies/{company}/logo', [CompanyController::class, 'showLogoForm'])->name('companies.logo.form');
     Route::post('/companies/{company}/logo', [CompanyController::class, 'storeLogo'])->name('companies.logo.store');
 

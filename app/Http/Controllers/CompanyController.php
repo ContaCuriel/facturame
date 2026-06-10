@@ -123,10 +123,21 @@ class CompanyController extends Controller
         $keyPath = $request->file('csd_key')->store($folder, 'private');
         $csdPassword = $request->csd_password;
 
+        // 🧠 LECTURA AUTOMÁTICA DE LA CADUCIDAD DEL CSD
+        $cerContentRaw = file_get_contents($request->file('csd_cer')->getRealPath());
+        $pemContent = "-----BEGIN CERTIFICATE-----\n" . chunk_split(base64_encode($cerContentRaw), 64, "\n") . "-----END CERTIFICATE-----\n";
+        
+        $certInfo = openssl_x509_parse($pemContent);
+        $expiresAt = null;
+        if ($certInfo && isset($certInfo['validTo_time_t'])) {
+            $expiresAt = Carbon::createFromTimestamp($certInfo['validTo_time_t']);
+        }
+
         $company->update([
             'csd_cer_path' => $cerPath,
             'csd_key_path' => $keyPath,
             'csd_password' => $csdPassword,
+            'csd_expires_at' => $expiresAt,
         ]);
 
         $cerContent = Storage::disk('private')->get($cerPath);
@@ -135,13 +146,45 @@ class CompanyController extends Controller
         $response = $facturama->uploadCsd($company->rfc, $cerContent, $keyContent, $csdPassword);
 
         if ($response->failed()) {
-            $errorBody = $response->body();
-            $statusCode = $response->status();
-            $detailedError = "Status: {$statusCode}. Respuesta: {$errorBody}";
-            return back()->with('error', 'Falló la subida a Facturama. ' . $detailedError);
+            return back()->with('error', 'Falló la subida a Facturama. Detalles: ' . $response->body());
         }
 
-        return redirect()->back()->with('success', '¡Certificados guardados y subidos a Facturama correctamente!');
+        return redirect()->back()->with('success', '¡CSD guardado correctamente! Caduca el: ' . ($expiresAt ? $expiresAt->format('d/m/Y') : 'Desconocido'));
+    }
+
+    // ✅ NUEVA FUNCIÓN PARA PROCESAR Y GUARDAR LA E.FIRMA
+    public function storeFiel(Request $request, Company $company)
+    {
+        $this->authorize('update', $company);
+
+        $request->validate([
+            'fiel_cer' => 'required|file|extensions:cer',
+            'fiel_key' => 'required|file|extensions:key',
+            'fiel_password' => 'required|string',
+        ]);
+
+        $folder = "fiel/{$company->id}";
+        $cerPath = $request->file('fiel_cer')->store($folder, 'private');
+        $keyPath = $request->file('fiel_key')->store($folder, 'private');
+        
+        // 🧠 LECTURA AUTOMÁTICA DE LA CADUCIDAD DE LA E.FIRMA
+        $cerContentRaw = file_get_contents($request->file('fiel_cer')->getRealPath());
+        $pemContent = "-----BEGIN CERTIFICATE-----\n" . chunk_split(base64_encode($cerContentRaw), 64, "\n") . "-----END CERTIFICATE-----\n";
+        
+        $certInfo = openssl_x509_parse($pemContent);
+        $expiresAt = null;
+        if ($certInfo && isset($certInfo['validTo_time_t'])) {
+            $expiresAt = Carbon::createFromTimestamp($certInfo['validTo_time_t']);
+        }
+
+        $company->update([
+            'fiel_cer_path' => $cerPath,
+            'fiel_key_path' => $keyPath,
+            'fiel_password' => $request->fiel_password,
+            'fiel_expires_at' => $expiresAt,
+        ]);
+
+        return redirect()->back()->with('success', '¡e.firma guardada correctamente! Caduca el: ' . ($expiresAt ? $expiresAt->format('d/m/Y') : 'Desconocido'));
     }
 
     public function showLogoForm(Company $company)
