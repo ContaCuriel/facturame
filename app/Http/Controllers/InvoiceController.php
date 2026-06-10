@@ -198,25 +198,45 @@ class InvoiceController extends Controller
     {
         $this->authorize('view', $invoice->company);
 
-        // 1. Pedimos directamente el 'pdf' nativo de Facturama
-        $response = $facturama->getInvoiceFile($invoice->facturama_id, 'pdf');
+        try {
+            if ($invoice->status === 'cancelled') {
+                // 🛑 Si la factura está cancelada, pedimos el Acuse del SAT
+                $response = $facturama->getAcuse($invoice->facturama_id, 'pdf', 'issuedLite');
 
-        if ($response->failed()) {
-            return back()->with('error', "No se pudo obtener el PDF de Facturama.");
+                if ($response->failed()) {
+                    return back()->with('error', 'No se pudo obtener el acuse de cancelación. Detalles: ' . $response->body());
+                }
+
+                $fileData = $response->json();
+                $base64Content = data_get($fileData, 'Content');
+                $filename = 'Acuse-Cancelacion-' . $invoice->uuid . '.pdf';
+
+            } else {
+                // ✅ Si la factura está activa, pedimos el PDF normal
+                $response = $facturama->getInvoiceFile($invoice->facturama_id, 'pdf');
+
+                if ($response->failed()) {
+                    return back()->with('error', "No se pudo obtener el PDF de Facturama. Detalles: " . $response->body());
+                }
+
+                $fileData = $response->json();
+                $base64Content = data_get($fileData, 'Content');
+                $filename = $invoice->uuid . '.pdf';
+            }
+
+            if (!$base64Content) {
+                return back()->with('error', 'El documento no está disponible o la respuesta está vacía.');
+            }
+
+            // Decodificamos y enviamos al navegador con el nombre correcto
+            return response(base64_decode($base64Content), 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            ]);
+
+        } catch (\Throwable $e) {
+            return back()->with('error', 'No se pudo descargar el documento: ' . $e->getMessage());
         }
-
-        $fileData = $response->json();
-        $base64Content = data_get($fileData, 'Content');
-
-        if (!$base64Content) {
-            return back()->with('error', 'No se encontró el contenido del PDF en la respuesta.');
-        }
-
-        // 2. Decodificamos y enviamos al navegador con el nombre correcto
-        return response(base64_decode($base64Content), 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="' . $invoice->uuid . '.pdf"',
-        ]);
     }
 
     /**
