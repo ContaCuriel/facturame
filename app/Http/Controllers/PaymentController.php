@@ -24,7 +24,6 @@ class PaymentController extends Controller
 
         $payments = $invoice->payments()->latest()->get();
 
-        // MATEMÁTICAS: Solo sumamos los pagos que NO estén cancelados
         $totalPaid = $payments->where('status', '!=', 'cancelled')->sum('amount');
         $outstandingBalance = $invoice->total - $totalPaid;
         
@@ -55,12 +54,6 @@ class PaymentController extends Controller
         }
 
         $outstandingBalance = $previousBalance - $validated['amount'];
-
-        // 🛠️ CORRECCIÓN: Evitar errores de punto flotante en el pago final
-        if ($outstandingBalance <= 0.01) { 
-            $outstandingBalance = 0;
-        }
-
         $installmentNumber = $payments->where('status', '!=', 'cancelled')->count() + 1;
         $amountPaid = round($validated['amount'], 2);
         
@@ -69,36 +62,26 @@ class PaymentController extends Controller
 
         $taxObject = '01'; 
         $taxesNode = [];
-        $transfers = [];
-        $retentions = [];
 
-        // Variables para el nodo Totals (REP 2.0)
-        $totalTransferBase16 = 0;
-        $totalTransferAmount16 = 0;
-        $totalRetentionIsr = 0;
-
-        // 🧮 ALGORITMO PROPORCIONAL MULTI-IMPUESTOS SAT REP 2.0
+        // 🧮 MATEMÁTICAS LIMPIAS Y PROPORCIONALES
         $proportion = $amountPaid / $invoice->total;
 
-        // 1. Si la factura original tiene IVA Trasladado
+        // 1. IVA Trasladado
         if ($invoice->taxes > 0) {
             $taxObject = '02'; 
             $taxPaid = round($invoice->taxes * $proportion, 2);
             $basePaid = round($invoice->subtotal * $proportion, 2);
 
-            $transfers[] = [
-                'Base' => $basePaid,
-                'Tax' => '002',
-                'FactorType' => 'Tasa',
+            $taxesNode[] = [
+                'Name' => 'IVA',
                 'Rate' => 0.160000,
-                'Amount' => $taxPaid
+                'Total' => $taxPaid,
+                'Base' => $basePaid,
+                'IsRetention' => false
             ];
-
-            $totalTransferBase16 += $basePaid;
-            $totalTransferAmount16 += $taxPaid;
         }
 
-        // 2. Si la factura original tiene Retención de ISR
+        // 2. Retención de ISR
         $originalIsr = $invoice->isr_retention ?? $invoice->isr ?? 0;
 
         if ($originalIsr > 0) {
@@ -107,22 +90,13 @@ class PaymentController extends Controller
             $baseIsrPaid = round($invoice->subtotal * $proportion, 2);
             $isrRate = round($originalIsr / $invoice->subtotal, 6);
 
-            $retentions[] = [
-                'Base' => $baseIsrPaid,
-                'Tax' => '001',
-                'FactorType' => 'Tasa',
+            $taxesNode[] = [
+                'Name' => 'ISR',
                 'Rate' => $isrRate,
-                'Amount' => $isrPaid
+                'Total' => $isrPaid,
+                'Base' => $baseIsrPaid,
+                'IsRetention' => true
             ];
-
-            $totalRetentionIsr += $isrPaid;
-        }
-
-        if (!empty($transfers)) {
-            $taxesNode['Transfers'] = $transfers;
-        }
-        if (!empty($retentions)) {
-            $taxesNode['Retentions'] = $retentions;
         }
 
         $relatedDocument = [
@@ -143,23 +117,11 @@ class PaymentController extends Controller
             $relatedDocument['Taxes'] = $taxesNode;
         }
 
-        // 🛠️ CORRECCIÓN: Armado del nodo de Totales obligatorio para REP 2.0
-        $totals = [
-            'TotalAmount' => $amountPaid
-        ];
-        if ($totalTransferAmount16 > 0) {
-            $totals['TotalTransfersBase16'] = round($totalTransferBase16, 2);
-            $totals['TotalTransfersAmount16'] = round($totalTransferAmount16, 2);
-        }
-        if ($totalRetentionIsr > 0) {
-            $totals['TotalRetentionsISR'] = round($totalRetentionIsr, 2);
-        }
-
+        // 🧹 ESTRUCTURA API LITE PURA (Sin 'Items' y usando 'Complemento')
         $facturamaData = [
             'Folio' => (string)$installmentNumber,
             'Serie' => 'REP',
             'CfdiType' => 'P',
-            'Exportation' => '01', // 🛠️ CORRECCIÓN: Obligatorio en CFDI 4.0
             'ExpeditionPlace' => $company->zip_code,
             'Issuer' => [
                 'FiscalRegime' => $company->fiscal_regime,
@@ -173,38 +135,20 @@ class PaymentController extends Controller
                 'FiscalRegime' => $client->fiscal_regime,
                 'TaxZipCode' => $client->zip_code,
             ],
-            'Items' => [
-                [
-                    'ProductCode' => '84111506',
-                    'Quantity' => 1,
-                    'UnitCode' => 'ACT',
-                    'Description' => 'Pago',
-                    'UnitPrice' => 0,
-                    'Subtotal' => 0,
-                    'TaxObject' => '01',
-                    'Total' => 0,
-                ]
-            ],
-            'Complement' => [
+            'Complemento' => [
                 'Payments' => [
                     [
                         'Date' => $paymentDateFacturama,
                         'PaymentForm' => $validated['payment_form'],
                         'Amount' => $amountPaid,
                         'Currency' => 'MXN',
-                        'Taxes' => empty($taxesNode) ? null : $taxesNode, // 🛠️ CORRECCIÓN: Impuestos a nivel Pago
                         'RelatedDocuments' => [ $relatedDocument ]
                     ]
-                ],
-                'Totals' => $totals // 🛠️ CORRECCIÓN: Nodo de totales del REP 2.0
+                ]
             ]
         ];
 
-        // Limpiar Taxes si quedó null
-        if ($facturamaData['Complement']['Payments'][0]['Taxes'] === null) {
-            unset($facturamaData['Complement']['Payments'][0]['Taxes']);
-        }
-
+        // LOGO PARA EL PDF
         if ($company->logo_path) {
             $facturamaData['LogoUrl'] = url(Storage::url($company->logo_path));
         }
