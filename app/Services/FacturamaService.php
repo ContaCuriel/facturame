@@ -143,4 +143,9 @@ class FacturamaService
 
         return $response;
     }
+    public function getAcuse($id, $format = 'pdf', $type = 'issued')
+    {
+        return Http::withBasicAuth($this->username, $this->password)
+            ->get("{$this->apiUrl}/api-lite/acuse/{$format}/{$type}/{$id}");
+    }
 }

@@ -249,12 +249,35 @@ class PaymentController extends Controller
     public function downloadPdf(Payment $payment, FacturamaService $facturama)
     {
         $this->authorize('view', $payment->invoice->company);
+        
         try {
-            $pdfBase64 = $facturama->getInvoicePdf($payment->facturama_id);
+            if ($payment->status === 'cancelled') {
+                // 🛑 Si el pago está cancelado, descargamos el Acuse del SAT
+                $response = $facturama->getAcuse($payment->facturama_id, 'pdf', 'issued');
+                
+                if ($response->failed()) {
+                    return back()->with('error', 'No se pudo obtener el acuse de cancelación de Facturama.');
+                }
+                
+                $pdfBase64 = data_get($response->json(), 'Content');
+                $filename = 'Acuse-Cancelacion-REP-' . $payment->uuid . '.pdf';
+                
+            } else {
+                // ✅ Si el pago está activo, descargamos el PDF normal de la factura
+                $pdfBase64 = $facturama->getInvoicePdf($payment->facturama_id);
+                $filename = 'REP-' . $payment->uuid . '.pdf';
+            }
+
+            if (!$pdfBase64) {
+                return back()->with('error', 'El documento no está disponible o la respuesta está vacía.');
+            }
+
             $pdfContent = base64_decode($pdfBase64);
+            
             return response($pdfContent, 200)
                 ->header('Content-Type', 'application/pdf')
-                ->header('Content-Disposition', 'attachment; filename="REP-' . $payment->id . '.pdf"');
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+                
         } catch (\Throwable $e) {
             return back()->with('error', 'No se pudo descargar el PDF: ' . $e->getMessage());
         }
