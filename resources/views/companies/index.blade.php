@@ -35,22 +35,55 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     @foreach ($companies as $company)
+                        @php
+                            // 🧠 MOTOR DE ALERTAS
+                            $alerts = [];
+                            $hasCriticalError = false;
+                            $now = \Carbon\Carbon::now();
+
+                            // Evaluar CSD
+                            if ($company->csd_expires_at) {
+                                $csdDate = \Carbon\Carbon::parse($company->csd_expires_at);
+                                $daysCsd = $now->diffInDays($csdDate, false); // false para permitir negativos
+                                
+                                if ($daysCsd < 0) {
+                                    $alerts[] = ['type' => 'danger', 'msg' => 'CSD Caducado'];
+                                    $hasCriticalError = true;
+                                } elseif ($daysCsd <= 30) {
+                                    $alerts[] = ['type' => 'warning', 'msg' => "CSD caduca en {$daysCsd} días"];
+                                }
+                            }
+
+                            // Evaluar e.firma
+                            if ($company->fiel_expires_at) {
+                                $fielDate = \Carbon\Carbon::parse($company->fiel_expires_at);
+                                $daysFiel = $now->diffInDays($fielDate, false);
+                                
+                                if ($daysFiel < 0) {
+                                    $alerts[] = ['type' => 'danger', 'msg' => 'e.firma Caducada'];
+                                    $hasCriticalError = true;
+                                } elseif ($daysFiel <= 30) {
+                                    $alerts[] = ['type' => 'warning', 'msg' => "e.firma caduca en {$daysFiel} días"];
+                                }
+                            }
+                        @endphp
+
                         <div x-show="search === '' || '{{ mb_strtolower(($company->commercial_name ?? '') . ' ' . $company->name . ' ' . $company->rfc) }}'.includes(search.toLowerCase())" 
                              x-transition:enter="transition ease-out duration-300"
                              x-transition:enter-start="opacity-0 transform scale-95"
                              x-transition:enter-end="opacity-100 transform scale-100"
-                             class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col group relative overflow-hidden cursor-default"
+                             class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border {{ $hasCriticalError ? 'border-red-300 dark:border-red-700' : 'border-gray-100 dark:border-gray-700' }} hover:shadow-xl hover:-translate-y-2 transition-all duration-300 flex flex-col group relative overflow-hidden cursor-default"
                              style="display: none;" x-init="$el.style.display = 'flex'">
                             
-                            <div class="h-2 w-full bg-gradient-to-r from-indigo-500 to-purple-600"></div>
+                            <div class="h-2 w-full {{ $hasCriticalError ? 'bg-red-500' : (count($alerts) > 0 ? 'bg-orange-400' : 'bg-gradient-to-r from-indigo-500 to-purple-600') }}"></div>
 
                             <div class="p-6 flex-grow flex flex-col items-center text-center">
                                 
-                                <div class="w-20 h-20 mb-5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center border-2 border-indigo-100 dark:border-indigo-800 overflow-hidden shadow-inner relative group-hover:scale-105 transition-transform">
+                                <div class="w-20 h-20 mb-5 rounded-full {{ count($alerts) > 0 ? 'bg-orange-50 dark:bg-orange-900/30 border-orange-100' : 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-100' }} flex items-center justify-center border-2 overflow-hidden shadow-inner relative group-hover:scale-105 transition-transform">
                                     @if($company->logo_path)
                                         <img src="{{ Storage::url($company->logo_path) }}" alt="{{ !empty(trim($company->commercial_name)) ? $company->commercial_name : $company->name }}" class="w-full h-full object-cover">
                                     @else
-                                        <span class="text-2xl font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                                        <span class="text-2xl font-black {{ count($alerts) > 0 ? 'text-orange-600' : 'text-indigo-600' }} uppercase tracking-wider">
                                             {{ substr(!empty(trim($company->commercial_name)) ? $company->commercial_name : $company->name, 0, 2) }}
                                         </span>
                                     @endif
@@ -70,18 +103,32 @@
                                     RFC: <span class="text-gray-800 dark:text-gray-200 font-bold">{{ $company->rfc }}</span>
                                 </p>
 
-                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800/50 mb-2">
-                                    <span class="w-2 h-2 mr-1.5 bg-green-500 rounded-full animate-pulse"></span> Sistema Activo
-                                </span>
+                                @if(empty($alerts))
+                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 border border-green-200 mb-2">
+                                        <span class="w-2 h-2 mr-1.5 bg-green-500 rounded-full animate-pulse"></span> Sistema Activo
+                                    </span>
+                                @else
+                                    <div class="flex flex-col gap-1 w-full mt-2 mb-2">
+                                        @foreach($alerts as $alert)
+                                            <span class="inline-flex justify-center items-center px-3 py-1.5 rounded-lg text-xs font-bold {{ $alert['type'] == 'danger' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-orange-100 text-orange-800 border border-orange-200' }}">
+                                                <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                                {{ $alert['msg'] }}
+                                            </span>
+                                        @endforeach
+                                    </div>
+                                @endif
                             </div>
 
-                            <div class="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-4 mt-auto flex gap-2">
-                                <a href="{{ route('companies.show', $company) }}" class="flex-1 flex items-center justify-center px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-sm text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-gray-700 hover:border-indigo-300 dark:hover:border-indigo-500 transition-colors group/btn">
+                            <div class="border-t {{ $hasCriticalError ? 'border-red-100 bg-red-50' : 'border-gray-100 bg-gray-50 dark:bg-gray-900/40' }} p-4 mt-auto flex gap-2">
+                                <a href="{{ route('companies.show', $company) }}" class="flex-1 flex items-center justify-center px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-sm text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-gray-700 transition-colors group/btn">
                                     Workspace
                                     <svg class="ml-2 w-4 h-4 group-hover/btn:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                                 </a>
-                                <a href="{{ route('companies.edit', $company) }}" class="flex items-center justify-center px-3 py-2.5 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl shadow-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" title="Editar Empresa">
+                                <a href="{{ route('companies.edit', $company) }}" class="flex items-center justify-center px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-colors" title="Editar Empresa">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                </a>
+                                <a href="{{ route('companies.showCsdForm', $company) }}" class="flex items-center justify-center px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-sm {{ count($alerts) > 0 ? 'text-orange-600' : 'text-gray-600' }} hover:bg-gray-50 transition-colors" title="Certificados">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                                 </a>
                             </div>
                         </div>
