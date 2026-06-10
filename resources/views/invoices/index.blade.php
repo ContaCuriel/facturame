@@ -60,7 +60,17 @@
                                     {{-- ✅ ETIQUETA VISUAL PPD O PUE ✅ --}}
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">
                                         @if($invoice->payment_method === 'PPD')
-                                            <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-bold border border-yellow-200">PPD (Crédito)</span>
+                                            @php
+                                                // Sumamos los pagos no cancelados
+                                                $totalPaid = $invoice->payments->where('status', '!=', 'cancelled')->sum('amount');
+                                            @endphp
+                                            
+                                            {{-- Le damos un margen de 1 centavo por si hay variaciones de redondeo --}}
+                                            @if($totalPaid >= ($invoice->total - 0.01))
+                                                <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold border border-green-200">PPD (Pagado)</span>
+                                            @else
+                                                <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-bold border border-yellow-200">PPD (Crédito)</span>
+                                            @endif
                                         @elseif($invoice->payment_method === 'PUE')
                                             <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold border border-green-200">PUE (Pagado)</span>
                                         @else
