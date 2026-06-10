@@ -16,6 +16,10 @@
                             <label for="name" class="block font-medium text-sm text-gray-700">Razón Social</label>
                             <input id="name" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" type="text" name="name" required autofocus />
                         </div>
+                        <div class="mb-4">
+        <label class="block text-gray-700 font-bold mb-2">Nombre Comercial (Opcional)</label>
+        <input type="text" name="commercial_name" class="w-full rounded-lg border-gray-300" placeholder="Ej. Taquería El Pastor">
+    </div>
 
                         <div class="mt-4">
                             <label for="rfc" class="block font-medium text-sm text-gray-700">RFC</label>

@@ -30,12 +30,42 @@ class CompanyController extends Controller
     {
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
-            'rfc' => 'required|string|size:13|unique:companies,rfc',
+            'commercial_name' => 'nullable|string|max:255', // ✅ Nueva columna
+            'rfc' => 'required|string|min:12|max:13', // ✅ Quitamos el unique para permitir sucursales
             'fiscal_regime' => 'required|string|max:10',
             'zip_code' => 'required|string|digits:5',
         ]);
+        
         auth()->user()->companies()->create($validatedData);
         return redirect()->route('companies.index')->with('success', '¡Empresa creada exitosamente!');
+    }
+
+    // ✅ --- NUEVA FUNCIÓN PARA EDITAR --- ✅
+    public function edit(Company $company)
+    {
+        $this->authorize('update', $company);
+        
+        // Pasamos los regímenes fiscales para que el select de la vista de edición funcione
+        $fiscalRegimes = config('sat.fiscal_regimes'); 
+        return view('companies.edit', compact('company', 'fiscalRegimes'));
+    }
+
+    // ✅ --- NUEVA FUNCIÓN PARA ACTUALIZAR DATOS --- ✅
+    public function update(Request $request, Company $company)
+    {
+        $this->authorize('update', $company);
+
+        $validatedData = $request->validate([
+            'name' => 'required|string|max:255',
+            'commercial_name' => 'nullable|string|max:255', // ✅ Nueva columna
+            'rfc' => 'required|string|min:12|max:13', // ✅ Quitamos el unique
+            'fiscal_regime' => 'required|string|max:10',
+            'zip_code' => 'required|string|digits:5',
+        ]);
+
+        $company->update($validatedData);
+
+        return redirect()->route('companies.index')->with('success', '¡Datos de la empresa actualizados correctamente!');
     }
 
     /**
@@ -63,7 +93,6 @@ class CompanyController extends Controller
         // Contar clientes
         $totalClients = $company->clients()->count();
 
-        // ✅ --- LÓGICA AÑADIDA --- ✅
         // Obtener las 5 facturas más recientes
         $recentInvoices = Invoice::where('company_id', $company->id)
             ->latest()
@@ -122,19 +151,19 @@ class CompanyController extends Controller
     }
 
     public function storeLogo(Request $request, Company $company)
-{
-    $this->authorize('update', $company);
+    {
+        $this->authorize('update', $company);
 
-    $request->validate([
-        'logo' => 'required|image|mimes:jpeg,png,jpg|max:2048',
-    ]);
+        $request->validate([
+            'logo' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+        ]);
 
-    // Guarda el logo en storage/app/public/logos
-    $path = $request->file('logo')->store('logos', 'public');
-    $company->update(['logo_path' => $path]);
+        // Guarda el logo en storage/app/public/logos
+        $path = $request->file('logo')->store('logos', 'public');
+        $company->update(['logo_path' => $path]);
 
-    // ¡ELIMINAMOS LA LLAMADA AL FACTURAMASERVICE AQUÍ!
+        // ¡ELIMINAMOS LA LLAMADA AL FACTURAMASERVICE AQUÍ!
 
-    return redirect()->back()->with('success', '¡Logo guardado exitosamente para tus facturas!');
-}
+        return redirect()->back()->with('success', '¡Logo guardado exitosamente para tus facturas!');
+    }
 }
