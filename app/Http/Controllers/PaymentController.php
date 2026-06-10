@@ -46,8 +46,9 @@ class PaymentController extends Controller
         $company = $invoice->company;
         $client = $invoice->client;
 
-        $payments = $invoice->payments()->get();
-        $totalPaid = $payments->where('status', '!=', 'cancelled')->sum('amount');
+        // Pagos previos activos
+        $payments = $invoice->payments()->where('status', '!=', 'cancelled')->get();
+        $totalPaid = $payments->sum('amount');
         $previousBalance = $invoice->total - $totalPaid;
         
         if ($validated['amount'] > $previousBalance) {
@@ -55,39 +56,98 @@ class PaymentController extends Controller
         }
 
         $outstandingBalance = $previousBalance - $validated['amount'];
-        $installmentNumber = $payments->where('status', '!=', 'cancelled')->count() + 1;
+        $installmentNumber = $payments->count() + 1;
         $amountPaid = round($validated['amount'], 2);
         
         $paymentDateFacturama = $validated['payment_date'] . 'T12:00:00';
         $paymentDateDB = $validated['payment_date'] . ' 12:00:00';
 
+        // 🧮 PASO 1: EXTRAER IMPUESTOS EXACTOS DE LA FACTURA ORIGINAL
+        $invoiceItems = is_string($invoice->items) ? json_decode($invoice->items, true) : $invoice->items;
+        $totalIvaOriginal = 0;
+        $totalIsrOriginal = 0;
+        $totalBaseOriginal = (float)$invoice->subtotal;
+
+        if (is_array($invoiceItems)) {
+            foreach ($invoiceItems as $item) {
+                $itemTotal = (float)$item['quantity'] * (float)$item['price'];
+                if (!empty($item['taxes'])) {
+                    foreach ($item['taxes'] as $tax) {
+                        $taxRate = (float)$tax['rate'];
+                        if ($taxRate > 1) $taxRate = $taxRate / 100;
+                        
+                        $taxAmount = $itemTotal * $taxRate;
+                        $isRetention = in_array(strtolower($tax['type']), ['retencion', 'retención']);
+                        
+                        if (!$isRetention) {
+                            $totalIvaOriginal += $taxAmount;
+                        } else {
+                            $totalIsrOriginal += $taxAmount;
+                        }
+                    }
+                }
+            }
+        } else {
+            // Fallback por si es una factura antigua sin JSON
+            $totalIvaOriginal = (float)$invoice->taxes;
+            $totalIsrOriginal = 0;
+        }
+        
+        $totalIvaOriginal = round($totalIvaOriginal, 2);
+        $totalIsrOriginal = round($totalIsrOriginal, 2);
+
+        // 🧮 PASO 2: CALCULAR CUÁNTO IMPUESTO YA SE CONSUMIÓ EN PAGOS ANTERIORES
+        $consumedBase = 0;
+        $consumedIva = 0;
+        $consumedIsr = 0;
+        
+        foreach ($payments as $prevPay) {
+            $prevProp = $prevPay->amount / $invoice->total;
+            $consumedBase += round($totalBaseOriginal * $prevProp, 2);
+            $consumedIva += round($totalIvaOriginal * $prevProp, 2);
+            $consumedIsr += round($totalIsrOriginal * $prevProp, 2);
+        }
+
+        // 🧮 PASO 3: CÁLCULO PERFECTO DE ESTE PAGO
+        $proportion = $amountPaid / $invoice->total;
+
+        if ($outstandingBalance <= 0.01) { 
+            // 🎯 ES EL FINIQUITO: Aplicamos resta exacta para matar centavos fantasmas
+            $basePaid = round($totalBaseOriginal - $consumedBase, 2);
+            $taxPaid = round($totalIvaOriginal - $consumedIva, 2);
+            $isrPaid = round($totalIsrOriginal - $consumedIsr, 2);
+            $outstandingBalance = 0; // Forzamos a cero absoluto
+        } else {
+            // Es un pago intermedio, usamos proporción matemática
+            $basePaid = round($totalBaseOriginal * $proportion, 2);
+            $taxPaid = round($totalIvaOriginal * $proportion, 2);
+            $isrPaid = round($totalIsrOriginal * $proportion, 2);
+        }
+
         $taxObject = '01'; 
         $taxesNode = [];
 
-        // 🧮 REGRESAMOS A LA MATEMÁTICA ESTABLE A PRUEBA DE CENTAVOS
-        if ($invoice->taxes > 0) {
-            $taxObject = '02'; 
-            $taxRate = 0.160000; 
-            
-            $originalIsr = $invoice->isr_retention ?? $invoice->isr ?? 0;
+        // 🧮 PASO 4: ESTRUCTURAR IMPUESTOS PARA EL SAT
+        if ($totalIvaOriginal > 0 || $totalIsrOriginal > 0) {
+            $taxObject = '02';
 
-            if ($originalIsr > 0) {
-                // Cálculo exacto forzado para cuando hay ISR
-                $proportion = $amountPaid / $invoice->total;
-                $taxPaid = round($invoice->taxes * $proportion, 2);
-                $isrPaid = round($originalIsr * $proportion, 2);
-                
-                // Truco maestro: forzar la base para que cuadre matemáticamente
-                $basePaid = round($amountPaid - $taxPaid + $isrPaid, 2);
-                $isrRate = round($originalIsr / $invoice->subtotal, 6);
+            if ($totalIvaOriginal > 0) {
+                $ivaRate = round($totalIvaOriginal / $totalBaseOriginal, 6);
+                if (abs($ivaRate - 0.16) < 0.01) $ivaRate = 0.160000;
 
                 $taxesNode[] = [
                     'Name' => 'IVA',
-                    'Rate' => $taxRate,
+                    'Rate' => $ivaRate,
                     'Total' => $taxPaid,
                     'Base' => $basePaid,
                     'IsRetention' => false
                 ];
+            }
+
+            if ($totalIsrOriginal > 0) {
+                $isrRate = round($totalIsrOriginal / $totalBaseOriginal, 6);
+                if (abs($isrRate - 0.0125) < 0.001) $isrRate = 0.012500;
+                if (abs($isrRate - 0.10) < 0.001) $isrRate = 0.100000;
 
                 $taxesNode[] = [
                     'Name' => 'ISR',
@@ -95,19 +155,6 @@ class PaymentController extends Controller
                     'Total' => $isrPaid,
                     'Base' => $basePaid,
                     'IsRetention' => true
-                ];
-
-            } else {
-                // El código original que te funcionó perfecto para el IVA normal
-                $taxPaid = round($amountPaid - ($amountPaid / (1 + $taxRate)), 2);
-                $basePaid = round($amountPaid - $taxPaid, 2);
-
-                $taxesNode[] = [
-                    'Name' => 'IVA',
-                    'Rate' => $taxRate,
-                    'Total' => $taxPaid,
-                    'Base' => $basePaid,
-                    'IsRetention' => false
                 ];
             }
         }
@@ -130,7 +177,7 @@ class PaymentController extends Controller
             $relatedDocument['Taxes'] = $taxesNode;
         }
 
-        // Estructura original estable de Facturama
+        // 🚀 PASO 5: ARMAR PAQUETE FINAL A FACTURAMA
         $facturamaData = [
             'Folio' => (string)$installmentNumber,
             'Serie' => 'REP',
@@ -167,9 +214,16 @@ class PaymentController extends Controller
 
         $response = $facturama->createInvoice($facturamaData);
 
+        // 🕵️ MEJORA DE DEBUG: Extraer errores detallados si falla
         if ($response->failed()) {
             $error = $response->json();
-            return back()->with('error', 'Error de Facturama: ' . ($error['message'] ?? $error['Message'] ?? json_encode($error)))->withInput();
+            $errorDetails = '';
+            if (isset($error['ModelState'])) {
+                $errorDetails = ' Detalles: ' . json_encode($error['ModelState']);
+            } else {
+                $errorDetails = ' Detalles: ' . json_encode($error);
+            }
+            return back()->with('error', 'Error de Facturama: ' . ($error['Message'] ?? $error['message'] ?? 'Rechazo del SAT.') . $errorDetails)->withInput();
         }
 
         $facturaResult = $response->json();
