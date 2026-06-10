@@ -24,6 +24,7 @@ class PaymentController extends Controller
 
         $payments = $invoice->payments()->latest()->get();
 
+        // MATEMÁTICAS: Solo sumamos los pagos que NO estén cancelados
         $totalPaid = $payments->where('status', '!=', 'cancelled')->sum('amount');
         $outstandingBalance = $invoice->total - $totalPaid;
         
@@ -63,40 +64,52 @@ class PaymentController extends Controller
         $taxObject = '01'; 
         $taxesNode = [];
 
-        // 🧮 MATEMÁTICAS LIMPIAS Y PROPORCIONALES
-        $proportion = $amountPaid / $invoice->total;
-
-        // 1. IVA Trasladado
+        // 🧮 REGRESAMOS A LA MATEMÁTICA ESTABLE A PRUEBA DE CENTAVOS
         if ($invoice->taxes > 0) {
             $taxObject = '02'; 
-            $taxPaid = round($invoice->taxes * $proportion, 2);
-            $basePaid = round($invoice->subtotal * $proportion, 2);
+            $taxRate = 0.160000; 
+            
+            $originalIsr = $invoice->isr_retention ?? $invoice->isr ?? 0;
 
-            $taxesNode[] = [
-                'Name' => 'IVA',
-                'Rate' => 0.160000,
-                'Total' => $taxPaid,
-                'Base' => $basePaid,
-                'IsRetention' => false
-            ];
-        }
+            if ($originalIsr > 0) {
+                // Cálculo exacto forzado para cuando hay ISR
+                $proportion = $amountPaid / $invoice->total;
+                $taxPaid = round($invoice->taxes * $proportion, 2);
+                $isrPaid = round($originalIsr * $proportion, 2);
+                
+                // Truco maestro: forzar la base para que cuadre matemáticamente
+                $basePaid = round($amountPaid - $taxPaid + $isrPaid, 2);
+                $isrRate = round($originalIsr / $invoice->subtotal, 6);
 
-        // 2. Retención de ISR
-        $originalIsr = $invoice->isr_retention ?? $invoice->isr ?? 0;
+                $taxesNode[] = [
+                    'Name' => 'IVA',
+                    'Rate' => $taxRate,
+                    'Total' => $taxPaid,
+                    'Base' => $basePaid,
+                    'IsRetention' => false
+                ];
 
-        if ($originalIsr > 0) {
-            $taxObject = '02';
-            $isrPaid = round($originalIsr * $proportion, 2);
-            $baseIsrPaid = round($invoice->subtotal * $proportion, 2);
-            $isrRate = round($originalIsr / $invoice->subtotal, 6);
+                $taxesNode[] = [
+                    'Name' => 'ISR',
+                    'Rate' => $isrRate,
+                    'Total' => $isrPaid,
+                    'Base' => $basePaid,
+                    'IsRetention' => true
+                ];
 
-            $taxesNode[] = [
-                'Name' => 'ISR',
-                'Rate' => $isrRate,
-                'Total' => $isrPaid,
-                'Base' => $baseIsrPaid,
-                'IsRetention' => true
-            ];
+            } else {
+                // El código original que te funcionó perfecto para el IVA normal
+                $taxPaid = round($amountPaid - ($amountPaid / (1 + $taxRate)), 2);
+                $basePaid = round($amountPaid - $taxPaid, 2);
+
+                $taxesNode[] = [
+                    'Name' => 'IVA',
+                    'Rate' => $taxRate,
+                    'Total' => $taxPaid,
+                    'Base' => $basePaid,
+                    'IsRetention' => false
+                ];
+            }
         }
 
         $relatedDocument = [
@@ -117,7 +130,7 @@ class PaymentController extends Controller
             $relatedDocument['Taxes'] = $taxesNode;
         }
 
-        // 🧹 ESTRUCTURA API LITE PURA (Sin 'Items' y usando 'Complemento')
+        // Estructura original estable de Facturama
         $facturamaData = [
             'Folio' => (string)$installmentNumber,
             'Serie' => 'REP',
@@ -148,7 +161,6 @@ class PaymentController extends Controller
             ]
         ];
 
-        // LOGO PARA EL PDF
         if ($company->logo_path) {
             $facturamaData['LogoUrl'] = url(Storage::url($company->logo_path));
         }
