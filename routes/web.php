@@ -64,6 +64,7 @@ Route::post('/invoices/{invoice}/payments', [\App\Http\Controllers\PaymentContro
 Route::get('/payments/{payment}/pdf', [\App\Http\Controllers\PaymentController::class, 'downloadPdf'])->name('payments.pdf');
 Route::get('/payments/{payment}/xml', [\App\Http\Controllers\PaymentController::class, 'downloadXml'])->name('payments.xml');
 Route::post('/payments/{payment}/email', [\App\Http\Controllers\PaymentController::class, 'sendEmail'])->name('payments.email');
+Route::post('/payments/{payment}/cancel', [App\Http\Controllers\PaymentController::class, 'cancel'])->name('payments.cancel');
 });
 
 require __DIR__.'/auth.php';

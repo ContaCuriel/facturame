@@ -129,6 +129,21 @@
             Enviar
         </button>
     </form>
+    {{-- BOTÓN DE CANCELAR PAGO (SAT) --}}
+@if($payment->status !== 'cancelled')
+    <form action="{{ route('payments.cancel', $payment->id) }}" method="POST" class="inline-block ml-2" onsubmit="return confirm('¿Estás MEGA seguro de cancelar este pago ante el SAT? El dinero regresará al saldo pendiente de la factura y esta acción no se puede deshacer.');">
+        @csrf
+        {{-- Usamos POST porque así lo dejamos en el controlador --}}
+        <button type="submit" class="bg-red-100 text-red-700 hover:bg-red-200 border border-red-300 px-3 py-1 rounded-md text-xs font-bold transition">
+            <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Cancelar (SAT)
+        </button>
+    </form>
+@else
+    <span class="ml-2 px-2 py-1 bg-gray-100 text-red-600 rounded-full text-xs font-bold border border-red-200">
+        CANCELADO
+    </span>
+@endif
                                 </td>
                             </tr>
                         @empty
