@@ -43,8 +43,9 @@ Route::middleware('auth')->group(function () {
 
     // Rutas de Configuración
     Route::get('/companies/{company}/csd', [CompanyController::class, 'showCsdForm'])->name('companies.csd.form');
-    Route::post('/companies/{company}/csd', [CompanyController::class, 'storeCsd'])->name('companies.csd.store');
-    Route::post('/companies/{company}/fiel', [App\Http\Controllers\CompanyController::class, 'storeFiel'])->name('companies.fiel.store');
+    // ✅ AQUÍ ESTÁ EL CAMBIO: Le pusimos el nombre que pide la vista
+    Route::post('/companies/{company}/csd', [CompanyController::class, 'storeCsd'])->name('companies.storeCsd');
+    Route::post('/companies/{company}/fiel', [CompanyController::class, 'storeFiel'])->name('companies.fiel.store');
     Route::get('/companies/{company}/logo', [CompanyController::class, 'showLogoForm'])->name('companies.logo.form');
     Route::post('/companies/{company}/logo', [CompanyController::class, 'storeLogo'])->name('companies.logo.store');
 
@@ -61,11 +62,11 @@ Route::middleware('auth')->group(function () {
     Route::delete('/invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
     Route::post('/invoices/{invoice}/send-email', [InvoiceController::class, 'sendByEmail'])->name('invoices.email');
     Route::get('/invoices/{invoice}/payments', [\App\Http\Controllers\PaymentController::class, 'index'])->name('payments.index');
-Route::post('/invoices/{invoice}/payments', [\App\Http\Controllers\PaymentController::class, 'store'])->name('payments.store');
-Route::get('/payments/{payment}/pdf', [\App\Http\Controllers\PaymentController::class, 'downloadPdf'])->name('payments.pdf');
-Route::get('/payments/{payment}/xml', [\App\Http\Controllers\PaymentController::class, 'downloadXml'])->name('payments.xml');
-Route::post('/payments/{payment}/email', [\App\Http\Controllers\PaymentController::class, 'sendEmail'])->name('payments.email');
-Route::post('/payments/{payment}/cancel', [App\Http\Controllers\PaymentController::class, 'cancel'])->name('payments.cancel');
+    Route::post('/invoices/{invoice}/payments', [\App\Http\Controllers\PaymentController::class, 'store'])->name('payments.store');
+    Route::get('/payments/{payment}/pdf', [\App\Http\Controllers\PaymentController::class, 'downloadPdf'])->name('payments.pdf');
+    Route::get('/payments/{payment}/xml', [\App\Http\Controllers\PaymentController::class, 'downloadXml'])->name('payments.xml');
+    Route::post('/payments/{payment}/email', [\App\Http\Controllers\PaymentController::class, 'sendEmail'])->name('payments.email');
+    Route::post('/payments/{payment}/cancel', [\App\Http\Controllers\PaymentController::class, 'cancel'])->name('payments.cancel');
 });
 
 require __DIR__.'/auth.php';
