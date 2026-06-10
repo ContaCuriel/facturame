@@ -252,11 +252,11 @@ class PaymentController extends Controller
         
         try {
             if ($payment->status === 'cancelled') {
-                // 🛑 Si el pago está cancelado, descargamos el Acuse del SAT
-                $response = $facturama->getAcuse($payment->facturama_id, 'pdf', 'issued');
+                // 🛑 Si el pago está cancelado, descargamos el Acuse del SAT con 'issuedLite'
+                $response = $facturama->getAcuse($payment->facturama_id, 'pdf', 'issuedLite');
                 
                 if ($response->failed()) {
-                    return back()->with('error', 'No se pudo obtener el acuse de cancelación de Facturama.');
+                    return back()->with('error', 'No se pudo obtener el acuse de cancelación. Detalles: ' . $response->body());
                 }
                 
                 $pdfBase64 = data_get($response->json(), 'Content');

@@ -143,7 +143,7 @@ class FacturamaService
 
         return $response;
     }
-    public function getAcuse($id, $format = 'pdf', $type = 'issued')
+    public function getAcuse($id, $format = 'pdf', $type = 'issuedLite')
     {
         return Http::timeout(40)
             ->withoutVerifying()
