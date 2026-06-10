@@ -36,7 +36,8 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     @foreach ($companies as $company)
-                        <div x-show="search === '' || '{{ mb_strtolower($company->name . ' ' . $company->rfc) }}'.includes(search.toLowerCase())" 
+                        @foreach ($companies as $company)
+                        <div x-show="search === '' || '{{ mb_strtolower(($company->commercial_name ?? '') . ' ' . $company->name . ' ' . $company->rfc) }}'.includes(search.toLowerCase())" 
                              x-transition:enter="transition ease-out duration-300"
                              x-transition:enter-start="opacity-0 transform scale-95"
                              x-transition:enter-end="opacity-100 transform scale-100"
@@ -66,22 +67,21 @@
                                         {{ $company->name }}
                                     </p>
                                 @endif
-                                
-                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800/50">
+
+                                <p class="text-sm text-gray-500 dark:text-gray-400 font-medium mb-4 bg-gray-100 dark:bg-gray-700/50 px-3 py-1 rounded-md inline-block {{ empty(trim($company->commercial_name)) ? 'mt-2' : '' }}">
+                                    RFC: <span class="text-gray-800 dark:text-gray-200 font-bold">{{ $company->rfc }}</span>
+                                </p>
+
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800/50 mb-2">
                                     <span class="w-2 h-2 mr-1.5 bg-green-500 rounded-full animate-pulse"></span> Sistema Activo
                                 </span>
                             </div>
 
-                            <!-- Botones Inferiores -->
                             <div class="border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-4 mt-auto flex gap-2">
-                                
-                                <!-- Botón principal: Entrar -->
                                 <a href="{{ route('companies.show', $company) }}" class="flex-1 flex items-center justify-center px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-sm text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-gray-700 hover:border-indigo-300 dark:hover:border-indigo-500 transition-colors group/btn">
                                     Workspace
                                     <svg class="ml-2 w-4 h-4 group-hover/btn:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                                 </a>
-
-                                <!-- Botón secundario: Editar -->
                                 <a href="{{ route('companies.edit', $company) }}" class="flex items-center justify-center px-3 py-2.5 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl shadow-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" title="Editar Empresa">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                                 </a>
