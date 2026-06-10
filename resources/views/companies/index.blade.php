@@ -49,20 +49,23 @@
                                 
                                 <div class="w-20 h-20 mb-5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center border-2 border-indigo-100 dark:border-indigo-800 overflow-hidden shadow-inner relative group-hover:scale-105 transition-transform">
                                     @if($company->logo_path)
-                                        <img src="{{ Storage::url($company->logo_path) }}" alt="{{ $company->name }}" class="w-full h-full object-cover">
+                                        <img src="{{ Storage::url($company->logo_path) }}" alt="{{ !empty(trim($company->commercial_name)) ? $company->commercial_name : $company->name }}" class="w-full h-full object-cover">
                                     @else
                                         <span class="text-2xl font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
-                                            {{ substr($company->name, 0, 2) }}
+                                            {{ substr(!empty(trim($company->commercial_name)) ? $company->commercial_name : $company->name, 0, 2) }}
                                         </span>
                                     @endif
                                 </div>
 
-                                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2 line-clamp-2 leading-tight" title="{{ $company->name }}">
-                                    {{ $company->name }}
+                                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-1 line-clamp-2 leading-tight">
+                                    {{ !empty(trim($company->commercial_name)) ? $company->commercial_name : $company->name }}
                                 </h3>
-                                <p class="text-sm text-gray-500 dark:text-gray-400 font-medium mb-4 bg-gray-100 dark:bg-gray-700/50 px-3 py-1 rounded-md inline-block">
-                                    RFC: <span class="text-gray-800 dark:text-gray-200 font-bold">{{ $company->rfc }}</span>
-                                </p>
+
+                                @if(!empty(trim($company->commercial_name)))
+                                    <p class="text-xs text-gray-400 dark:text-gray-500 mb-2 truncate w-full" title="Razón Social: {{ $company->name }}">
+                                        {{ $company->name }}
+                                    </p>
+                                @endif
                                 
                                 <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800/50">
                                     <span class="w-2 h-2 mr-1.5 bg-green-500 rounded-full animate-pulse"></span> Sistema Activo
