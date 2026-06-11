@@ -11,30 +11,46 @@ use Throwable;
 
 class RequestSatGastos extends Command
 {
-    protected $signature = 'sat:request-gastos';
-    protected $description = 'Solicita al SAT los paquetes de gastos del mes actual para todas las empresas';
+    // Agregamos parámetros opcionales para pedir históricos
+    protected $signature = 'sat:request-gastos {--inicio=} {--fin=} {--company_id=}';
+    protected $description = 'Solicita al SAT los paquetes de gastos. Por defecto mes actual, o usa --inicio y --fin (Y-m-d)';
 
     public function handle()
     {
-        // Traemos solo a las empresas que sí tienen su FIEL subida
+        // Traemos a las empresas que tienen FIEL
         $companies = Company::whereNotNull('fiel_cer_path')
                             ->whereNotNull('fiel_key_path')
                             ->get();
 
         $this->info("Iniciando solicitud de gastos para " . $companies->count() . " empresas...");
 
-        // AQUÍ DEFINIMOS LAS FECHAS: Desde el día 1 del mes actual, hasta hoy.
-        $fechaInicio = new DateTimeImmutable(now()->startOfMonth()->format('Y-m-d 00:00:00'));
-        $fechaFin = new DateTimeImmutable(now()->format('Y-m-d 23:59:59'));
-
         foreach ($companies as $company) {
-            $this->info("Solicitando para la empresa: {$company->name} (RFC: {$company->rfc})");
+            $this->info("Analizando: {$company->name} (RFC: {$company->rfc})");
+
+            // Revisamos si esta empresa ya ha hecho solicitudes antes
+            $tieneSolicitudesPrevias = SatRequest::where('company_id', $company->id)
+                                                 ->where('type', 'gastos')
+                                                 ->exists();
+
+            if (!$tieneSolicitudesPrevias && $company->fecha_inicio_descarga_gastos) {
+                // PRIMERA VEZ: Usamos la fecha que el cliente puso en la interfaz
+                $fechaInicioStr = $company->fecha_inicio_descarga_gastos->format('Y-m-d 00:00:00');
+                $this->info("Primera descarga detectada. Solicitando histórico desde: {$fechaInicioStr}");
+            } else {
+                // MANTENIMIENTO DIARIO: Solo pedimos desde el inicio del mes actual
+                $fechaInicioStr = now()->startOfMonth()->format('Y-m-d 00:00:00');
+                $this->info("Actualización regular. Solicitando desde el inicio de mes: {$fechaInicioStr}");
+            }
+
+            $fechaFinStr = now()->format('Y-m-d 23:59:59');
+
+            $fechaInicio = new DateTimeImmutable($fechaInicioStr);
+            $fechaFin = new DateTimeImmutable($fechaFinStr);
 
             try {
                 $satService = new SatScraperService($company);
                 $requestId = $satService->solicitarDescargaDeGastos($fechaInicio, $fechaFin);
 
-                // Guardamos el ticket en nuestra cartera
                 SatRequest::create([
                     'company_id' => $company->id,
                     'request_id' => $requestId,

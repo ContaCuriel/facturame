@@ -90,6 +90,22 @@
                             <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Contraseña de la e.firma</label>
                             <input type="password" name="fiel_password" class="w-full rounded-xl border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500 shadow-sm" required placeholder="••••••••">
                         </div>
+                        <div class="mt-6 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
+    <h4 class="text-md font-bold text-blue-800 dark:text-blue-300 mb-2">📥 Sincronización Automática de Gastos</h4>
+    <p class="text-sm text-blue-600 dark:text-blue-400 mb-4">
+        Selecciona desde qué fecha quieres que nuestro sistema descargue tus facturas recibidas (histórico). 
+        A partir de esta fecha, el sistema se mantendrá actualizado automáticamente todos los días.
+    </p>
+    
+    <div>
+        <label for="fecha_inicio_descarga_gastos" class="block font-medium text-sm text-gray-700 dark:text-gray-300">
+            Fecha inicial de descarga
+        </label>
+        <input type="date" id="fecha_inicio_descarga_gastos" name="fecha_inicio_descarga_gastos" 
+               value="{{ old('fecha_inicio_descarga_gastos', $company->fecha_inicio_descarga_gastos?->format('Y-m-d')) }}"
+               class="block mt-1 w-full md:w-1/2 rounded-md shadow-sm border-gray-300 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-300">
+    </div>
+</div>
                         <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-xl transition shadow-md">
                             Subir / Actualizar e.firma
                         </button>

@@ -161,6 +161,7 @@ class CompanyController extends Controller
             'fiel_cer' => 'required|file|extensions:cer',
             'fiel_key' => 'required|file|extensions:key',
             'fiel_password' => 'required|string',
+            'fecha_inicio_descarga_gastos' => 'nullable|date',
         ]);
 
         $folder = "fiel/{$company->id}";
@@ -174,17 +175,19 @@ class CompanyController extends Controller
         $certInfo = openssl_x509_parse($pemContent);
         $expiresAt = null;
         if ($certInfo && isset($certInfo['validTo_time_t'])) {
-            $expiresAt = Carbon::createFromTimestamp($certInfo['validTo_time_t']);
+            $expiresAt = \Carbon\Carbon::createFromTimestamp($certInfo['validTo_time_t']);
         }
 
+        // ✅ AGREGAMOS LA FECHA DE DESCARGA DIRECTO AL UPDATE
         $company->update([
             'fiel_cer_path' => $cerPath,
             'fiel_key_path' => $keyPath,
             'fiel_password' => $request->fiel_password,
             'fiel_expires_at' => $expiresAt,
+            'fecha_inicio_descarga_gastos' => $request->fecha_inicio_descarga_gastos,
         ]);
 
-        return redirect()->back()->with('success', '¡e.firma guardada correctamente! Caduca el: ' . ($expiresAt ? $expiresAt->format('d/m/Y') : 'Desconocido'));
+        return redirect()->back()->with('success', '¡e.firma y configuración guardadas correctamente! Caduca el: ' . ($expiresAt ? $expiresAt->format('d/m/Y') : 'Desconocido'));
     }
 
     public function showLogoForm(Company $company)

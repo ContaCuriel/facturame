@@ -27,6 +27,14 @@ class Company extends Model
         'fiel_password',
         'csd_expires_at',
         'fiel_expires_at',
+        'fecha_inicio_descarga_gastos',
+    ];
+
+    // AQUÍ ESTÁN LOS CASTS NUEVOS
+    protected $casts = [
+        'csd_expires_at' => 'datetime',
+        'fiel_expires_at' => 'datetime',
+        'fecha_inicio_descarga_gastos' => 'date',
     ];
 
     // Encriptación automática de contraseñas al guardarse en la BD
