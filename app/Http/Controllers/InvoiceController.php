@@ -425,6 +425,19 @@ class InvoiceController extends Controller
             return back()->with('error', 'Error inesperado del servidor: ' . $e->getMessage())->withInput();
         }
     }
+    public function show(Invoice $invoice)
+    {
+        $company = $invoice->company;
+        $this->authorize('view', $company);
+
+        // Cargamos las relaciones para no saturar la base de datos (Eager Loading)
+        $invoice->load(['client', 'payments']);
+
+        return view('invoices.show', [
+            'company' => $company,
+            'invoice' => $invoice,
+        ]);
+    }
 
     public function downloadPdf(Invoice $invoice, FacturamaService $facturama)
     {
