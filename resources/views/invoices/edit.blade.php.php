@@ -1,7 +1,7 @@
 <x-company-panel-layout :company="$company">
     <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight mb-6">
-        Nueva Factura para: {{ $company->name }}
-    </h2>
+    Continuar Borrador: {{ $company->name }}
+</h2>
 
     <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
         <div class="p-6 md:p-8 text-gray-900 dark:text-gray-100">
@@ -25,8 +25,9 @@
                     </div>
                 @endif
 
-                <form method="POST" action="{{ route('invoices.store') }}">
-                    @csrf
+                <form method="POST" action="{{ route('invoices.update', $invoice->id) }}">
+    @csrf
+    @method('PUT')
                     <input type="hidden" name="company_id" value="{{ $company->id }}">
                     <input type="hidden" name="client_id" x-model="selectedClient.id">
                     <input type="hidden" name="items" :value="JSON.stringify(items)">
@@ -242,13 +243,21 @@
     <script>
         function invoiceForm() {
             return {
-                // Cliente
-                clientSearchQuery: '', clientSearchResults: [], showClientResults: false, selectedClient: {},
-                invoiceEmail: '',
-                // Productos
-                productSearchQuery: '', productSearchResults: [], showProductResults: false, items: [],
-                // Datos Fiscales
-                cfdiUse: '', paymentForm: '', paymentMethod: '',
+                // Precargamos el cliente guardado
+                clientSearchQuery: '{{ $invoice->client->name ?? '' }}', 
+                clientSearchResults: [], showClientResults: false, 
+                selectedClient: {!! $invoice->client ? $invoice->client->toJson() : '{}' !!},
+                invoiceEmail: '{{ $invoice->client->email ?? '' }}',
+                
+                // Precargamos los productos guardados
+                productSearchQuery: '', productSearchResults: [], showProductResults: false, 
+                items: {!! json_encode($invoice->items ?? []) !!},
+                
+                // Precargamos los datos fiscales guardados
+                cfdiUse: '{{ $invoice->client->cfdi_use ?? '' }}', 
+                paymentForm: '{{ $invoice->payment_method ?? '' }}', // Ajusta si guardas form/method distinto
+                paymentMethod: '{{ $invoice->payment_method ?? '' }}',
+                
                 // Modal
                 taxModalOpen: false, editingItemIndex: null,
 

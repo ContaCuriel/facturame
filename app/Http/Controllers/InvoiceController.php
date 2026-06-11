@@ -50,6 +50,7 @@ class InvoiceController extends Controller
     {
         try {
             $validated = $request->validate([
+                'action' => 'required|in:draft,preview,issue', // Capturamos qué botón se presionó
                 'company_id' => 'required|exists:companies,id',
                 'client_id' => 'required|exists:clients,id',
                 'items' => 'required|json',
@@ -69,7 +70,9 @@ class InvoiceController extends Controller
             $totals = json_decode($validated['totals'], true);
             
             $nextFolio = $company->next_folio_number;
+            $action = $validated['action'];
 
+            // 1. Construimos los datos base (igual que antes)
             $facturamaData = [
                 'Folio' => (string)$nextFolio, 'Serie' => 'F', 'CfdiType' => 'I',
                 'PaymentForm' => $validated['payment_form'], 'PaymentMethod' => $validated['payment_method'],
@@ -79,7 +82,6 @@ class InvoiceController extends Controller
                     'Rfc' => $client->rfc, 'Name' => $client->name, 'CfdiUse' => $validated['cfdi_use'],
                     'FiscalRegime' => $client->fiscal_regime, 'TaxZipCode' => $client->zip_code,
                 ],
-                // 🧮 REESTRUCTURACIÓN MATEMÁTICA BRUTAL PARA EVITAR ERRORES DE RETENCIONES / CENTAVOS
                 'Items' => array_map(function ($item) {
                     $itemQuantity = (float)$item['quantity'];
                     $itemUnitPrice = round((float)$item['price'], 2);
@@ -112,15 +114,9 @@ class InvoiceController extends Controller
                         $concept['Taxes'] = [];
                         foreach ($item['taxes'] as $tax) {
                             $taxRate = (float)$tax['rate'];
-                            
-                            // Salvavidas por si el usuario ingresó porcentaje entero (ej. 1.25 en vez de 0.0125)
-                            if ($taxRate > 1) {
-                                $taxRate = $taxRate / 100;
-                            }
+                            if ($taxRate > 1) { $taxRate = $taxRate / 100; }
 
                             $taxAmount = round($itemSubtotal * $taxRate, 2);
-                            
-                            // Detección segura de Retenciones (soporta "Retencion" y "Retención")
                             $isRetention = in_array(strtolower($tax['type']), ['retencion', 'retención']);
 
                             $concept['Taxes'][] = [
@@ -139,24 +135,54 @@ class InvoiceController extends Controller
                         }
                     }
 
-                    // Forzamos que el total del concepto vaya redondeado y limpio
                     $concept['Total'] = round($itemTotal, 2);
                     return $concept;
                 }, $items),
             ];
             
             if ($company->logo_path) {
-                // Genera la URL pública completa usando la APP_URL de tu .env
                 $facturamaData['LogoUrl'] = url(Storage::url($company->logo_path));
             }
-
             if (!empty($validated['invoice_email'])) {
                 $facturamaData['Receiver']['Email'] = $validated['invoice_email'];
             }
             if (!empty($validated['observations'])) {
                 $facturamaData['Observations'] = $validated['observations'];
             }
-            
+
+            // 2. Lógica según la acción solicitada
+            if ($action === 'preview') {
+                // Generamos un PDF temporal en memoria usando una vista que crearemos
+                $pdf = Pdf::loadView('invoices.preview_pdf', [
+                    'facturamaData' => $facturamaData,
+                    'company' => $company,
+                    'client' => $client,
+                    'totals' => $totals,
+                ]);
+                return $pdf->stream("PRE-FACTURA-{$company->rfc}.pdf");
+            }
+
+            if ($action === 'draft') {
+                // Guardamos en BD y retornamos sin timbrar
+                Invoice::create([
+                    'facturama_id' => null, // No hay ID de Facturama aún
+                    'uuid' => null, // No hay UUID oficial
+                    'company_id' => $company->id, 
+                    'client_id' => $client->id,
+                    'folio' => $nextFolio, 
+                    'series' => $facturamaData['Serie'],
+                    'subtotal' => $totals['subtotal'],
+                    'taxes' => $totals['total_traslados'] - $totals['total_retenciones'],
+                    'total' => $totals['total'], 
+                    'status' => 'draft', // Guardado como borrador
+                    'items' => $items,
+                    'payment_method' => $validated['payment_method'],
+                ]);
+                return redirect()->route('invoices.index', ['company_id' => $company->id])
+                                 ->with('success', 'Borrador guardado exitosamente.');
+            }
+
+            // Si llegamos aquí, action === 'issue' (Timbrar)
             $response = $facturama->createInvoice($facturamaData);
 
             if ($response->failed()) {
@@ -170,24 +196,230 @@ class InvoiceController extends Controller
             $facturamaId = data_get($facturaResult, 'Id');
 
             if (!$invoiceUuid || !$facturamaId) {
-                Log::error('Respuesta incompleta de Facturama', $facturamaResult);
-                return back()->with('error', 'Factura timbrada, pero la respuesta de Facturama fue incompleta.');
+                Log::error('Respuesta incompleta de Facturama', $facturaResult);
+                return back()->with('error', 'Factura timbrada, pero la respuesta fue incompleta.');
             }
 
             $company->increment('next_folio_number');
 
             Invoice::create([
-                'facturama_id' => $facturamaId, 'uuid' => $invoiceUuid,
-                'company_id' => $company->id, 'client_id' => $client->id,
-                'folio' => $nextFolio, 'series' => $facturamaData['Serie'],
+                'facturama_id' => $facturamaId, 
+                'uuid' => $invoiceUuid,
+                'company_id' => $company->id, 
+                'client_id' => $client->id,
+                'folio' => $nextFolio, 
+                'series' => $facturamaData['Serie'],
                 'subtotal' => $totals['subtotal'],
                 'taxes' => $totals['total_traslados'] - $totals['total_retenciones'],
-                'total' => $totals['total'], 'status' => 'issued', 'items' => $items,
+                'total' => $totals['total'], 
+                'status' => 'issued', 
+                'items' => $items,
                 'payment_method' => $validated['payment_method'],
             ]);
 
             return redirect()->route('invoices.index', ['company_id' => $company->id])
                              ->with('success', '¡Factura timbrada exitosamente! UUID: ' . $invoiceUuid);
+                             
+        } catch (Throwable $e) {
+            Log::error('Error fatal al facturar: ' . $e->getMessage());
+            return back()->with('error', 'Error inesperado del servidor: ' . $e->getMessage())->withInput();
+        }
+    }
+
+    public function edit(Invoice $invoice)
+    {
+        $company = $invoice->company;
+        $this->authorize('update', $company);
+
+        // Solo se pueden editar facturas que estén en borrador
+        if ($invoice->status !== 'draft') {
+            return redirect()->route('invoices.index', ['company_id' => $company->id])
+                             ->with('error', 'Solo los borradores pueden ser editados.');
+        }
+
+        return view('invoices.edit', [
+            'company' => $company,
+            'invoice' => $invoice,
+            'paymentForms' => config('sat.payment_forms'),
+            'paymentMethods' => config('sat.payment_methods'),
+            'cfdiUses' => config('sat.cfdi_uses'),
+        ]);
+    }
+
+    public function update(Request $request, Invoice $invoice, FacturamaService $facturama)
+    {
+        try {
+            $validated = $request->validate([
+                'action' => 'required|in:draft,preview,issue', // Capturamos qué botón se presionó
+                'company_id' => 'required|exists:companies,id',
+                'client_id' => 'required|exists:clients,id',
+                'items' => 'required|json',
+                'totals' => 'required|json',
+                'cfdi_use' => 'required|string',
+                'payment_form' => 'required|string',
+                'payment_method' => 'required|string',
+                'observations' => 'nullable|string',
+                'invoice_email' => 'nullable|email',
+            ]);
+            
+            $company = Company::findOrFail($validated['company_id']);
+            $client = Client::findOrFail($validated['client_id']);
+            $this->authorize('update', $company);
+
+            $items = json_decode($validated['items'], true);
+            $totals = json_decode($validated['totals'], true);
+            
+            $nextFolio = $company->next_folio_number;
+            $action = $validated['action'];
+
+            // 1. Construimos los datos base (igual que antes)
+            $facturamaData = [
+                'Folio' => (string)$nextFolio, 'Serie' => 'F', 'CfdiType' => 'I',
+                'PaymentForm' => $validated['payment_form'], 'PaymentMethod' => $validated['payment_method'],
+                'ExpeditionPlace' => $company->zip_code,
+                'Issuer' => [ 'FiscalRegime' => $company->fiscal_regime, 'Rfc' => $company->rfc, 'Name' => $company->name, ],
+                'Receiver' => [
+                    'Rfc' => $client->rfc, 'Name' => $client->name, 'CfdiUse' => $validated['cfdi_use'],
+                    'FiscalRegime' => $client->fiscal_regime, 'TaxZipCode' => $client->zip_code,
+                ],
+                'Items' => array_map(function ($item) {
+                    $itemQuantity = (float)$item['quantity'];
+                    $itemUnitPrice = round((float)$item['price'], 2);
+                    $itemSubtotal = round($itemQuantity * $itemUnitPrice, 2);
+
+                    $concept = [
+                        'ProductCode' => $item['sat_product_key'], 
+                        'Description' => $item['description'],
+                        'UnitCode' => $item['sat_unit_key'], 
+                        'Quantity' => $itemQuantity, 
+                        'UnitPrice' => $itemUnitPrice,
+                        'Subtotal' => $itemSubtotal, 
+                        'TaxObject' => $item['isTaxable'] ? '02' : '01',
+                    ];
+
+                    if (!empty($item['student'])) {
+                        $concept['Complement'] = [
+                            'EducationalInstitution' => [
+                                'AutRvoe' => $item['student']['aut_rvoe'],
+                                'Curp' => $item['student']['curp'],
+                                'EducationLevel' => $item['student']['education_level'],
+                                'StudentsName' => $item['student']['name'],
+                            ]
+                        ];
+                    }
+
+                    $itemTotal = $itemSubtotal;
+
+                    if ($item['isTaxable'] && !empty($item['taxes'])) {
+                        $concept['Taxes'] = [];
+                        foreach ($item['taxes'] as $tax) {
+                            $taxRate = (float)$tax['rate'];
+                            if ($taxRate > 1) { $taxRate = $taxRate / 100; }
+
+                            $taxAmount = round($itemSubtotal * $taxRate, 2);
+                            $isRetention = in_array(strtolower($tax['type']), ['retencion', 'retención']);
+
+                            $concept['Taxes'][] = [
+                                'Total' => $taxAmount, 
+                                'Name' => $tax['name'], 
+                                'Base' => $itemSubtotal,
+                                'Rate' => $taxRate, 
+                                'IsRetention' => $isRetention,
+                            ];
+
+                            if (!$isRetention) { 
+                                $itemTotal += $taxAmount; 
+                            } else { 
+                                $itemTotal -= $taxAmount; 
+                            }
+                        }
+                    }
+
+                    $concept['Total'] = round($itemTotal, 2);
+                    return $concept;
+                }, $items),
+            ];
+            
+            if ($company->logo_path) {
+                $facturamaData['LogoUrl'] = url(Storage::url($company->logo_path));
+            }
+            if (!empty($validated['invoice_email'])) {
+                $facturamaData['Receiver']['Email'] = $validated['invoice_email'];
+            }
+            if (!empty($validated['observations'])) {
+                $facturamaData['Observations'] = $validated['observations'];
+            }
+
+            // 2. Lógica según la acción solicitada
+            if ($action === 'preview') {
+                // Generamos un PDF temporal en memoria usando una vista que crearemos
+                $pdf = Pdf::loadView('invoices.preview_pdf', [
+                    'facturamaData' => $facturamaData,
+                    'company' => $company,
+                    'client' => $client,
+                    'totals' => $totals,
+                ]);
+                return $pdf->stream("PRE-FACTURA-{$company->rfc}.pdf");
+            }
+
+            if ($action === 'draft') {
+                // Guardamos en BD y retornamos sin timbrar
+                $invoice->update([
+                    'facturama_id' => null, // No hay ID de Facturama aún
+                    'uuid' => null, // No hay UUID oficial
+                    'company_id' => $company->id, 
+                    'client_id' => $client->id,
+                    'folio' => $nextFolio, 
+                    'series' => $facturamaData['Serie'],
+                    'subtotal' => $totals['subtotal'],
+                    'taxes' => $totals['total_traslados'] - $totals['total_retenciones'],
+                    'total' => $totals['total'], 
+                    'status' => 'draft', // Guardado como borrador
+                    'items' => $items,
+                    'payment_method' => $validated['payment_method'],
+                ]);
+                return redirect()->route('invoices.index', ['company_id' => $company->id])
+                                 ->with('success', 'Borrador guardado exitosamente.');
+            }
+
+            // Si llegamos aquí, action === 'issue' (Timbrar)
+            $response = $facturama->createInvoice($facturamaData);
+
+            if ($response->failed()) {
+                $error = $response->json();
+                $errorMessage = 'Error de Facturama: ' . ($error['message'] ?? $error['Message'] ?? json_encode($error));
+                return back()->with('error', $errorMessage)->withInput();
+            }
+
+            $facturaResult = $response->json();
+            $invoiceUuid = data_get($facturaResult, 'Complement.TaxStamp.Uuid') ?? data_get($facturaResult, 'Complemento.TaxStamp.Uuid');
+            $facturamaId = data_get($facturaResult, 'Id');
+
+            if (!$invoiceUuid || !$facturamaId) {
+                Log::error('Respuesta incompleta de Facturama', $facturaResult);
+                return back()->with('error', 'Factura timbrada, pero la respuesta fue incompleta.');
+            }
+
+            $company->increment('next_folio_number');
+
+            $invoice->update([
+                'facturama_id' => $facturamaId, 
+                'uuid' => $invoiceUuid,
+                'company_id' => $company->id, 
+                'client_id' => $client->id,
+                'folio' => $nextFolio, 
+                'series' => $facturamaData['Serie'],
+                'subtotal' => $totals['subtotal'],
+                'taxes' => $totals['total_traslados'] - $totals['total_retenciones'],
+                'total' => $totals['total'], 
+                'status' => 'issued', 
+                'items' => $items,
+                'payment_method' => $validated['payment_method'],
+            ]);
+
+            return redirect()->route('invoices.index', ['company_id' => $company->id])
+                             ->with('success', '¡Factura timbrada exitosamente! UUID: ' . $invoiceUuid);
+                             
         } catch (Throwable $e) {
             Log::error('Error fatal al facturar: ' . $e->getMessage());
             return back()->with('error', 'Error inesperado del servidor: ' . $e->getMessage())->withInput();
