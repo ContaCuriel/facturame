@@ -69,29 +69,29 @@
             <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
                 <h2 class="text-lg font-bold border-b dark:border-gray-700 pb-2 mb-4 text-gray-800 dark:text-gray-200">Conceptos</h2>
                 <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                        <thead class="bg-gray-50 dark:bg-gray-700">
-                            <tr>
-                                <th class="px-4 py-2 text-left font-medium text-gray-500 dark:text-gray-300">Cant</th>
-                                <th class="px-4 py-2 text-left font-medium text-gray-500 dark:text-gray-300">Descripción</th>
-                                <th class="px-4 py-2 text-right font-medium text-gray-500 dark:text-gray-300">P. Unitario</th>
-                                <th class="px-4 py-2 text-right font-medium text-gray-500 dark:text-gray-300">Importe</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                            @foreach ($invoice->items as $item)
-                                <tr>
-                                    <td class="px-4 py-3">{{ $item['quantity'] }}</td>
-                                    <td class="px-4 py-3">{{ $item['description'] }}
-                                        <span class="block text-xs text-gray-400 dark:text-gray-500">Clave SAT: {{ $item['sat_product_key'] ?? 'N/A' }}</span>
-                                    </td>
-                                    <td class="px-4 py-3 text-right">${{ number_format($item['price'], 2) }}</td>
-                                    <td class="px-4 py-3 text-right font-medium">${{ number_format($item['total'], 2) }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
+    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+        <thead class="bg-gray-50 dark:bg-gray-700">
+            <tr>
+                <th class="px-4 py-2 text-left font-bold text-white">Cant</th>
+                <th class="px-4 py-2 text-left font-bold text-white">Descripción</th>
+                <th class="px-4 py-2 text-right font-bold text-white">P. Unitario</th>
+                <th class="px-4 py-2 text-right font-bold text-white">Importe</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            @foreach ($invoice->items as $item)
+                <tr>
+                    <td class="px-4 py-3">{{ $item['quantity'] }}</td>
+                    <td class="px-4 py-3">{{ $item['description'] }}
+                        <span class="block text-xs text-gray-400 dark:text-gray-500">Clave SAT: {{ $item['sat_product_key'] ?? 'N/A' }}</span>
+                    </td>
+                    <td class="px-4 py-3 text-right">${{ number_format($item['price'], 2) }}</td>
+                    <td class="px-4 py-3 text-right font-medium">${{ number_format($item['total'], 2) }}</td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+</div>
 
                 <div class="mt-6 flex justify-end">
                     <div class="w-full max-w-xs space-y-2 text-sm text-gray-600 dark:text-gray-300">
