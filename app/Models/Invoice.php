@@ -12,16 +12,37 @@ class Invoice extends Model
     use HasFactory;
 
     protected $fillable = [
-        'facturama_id', // <-- Añadido
-        'company_id', 'client_id', 'uuid', 'folio', 'series', 
-        'subtotal', 'taxes', 'total', 'status', 'items',
+        'facturama_id',
+        'company_id', 
+        'client_id', 
+        'uuid', 
+        'folio', 
+        'series', 
+        'subtotal', 
+        'taxes', 
+        'total', 
+        'status', // draft, issued, cancelled
+        'items',
         'payment_method',
     ];
 
     protected $casts = [
-        'items' => 'array', 'subtotal' => 'decimal:2',
-        'taxes' => 'decimal:2', 'total' => 'decimal:2',
+        'items' => 'array', 
+        'subtotal' => 'decimal:2',
+        'taxes' => 'decimal:2', 
+        'total' => 'decimal:2',
     ];
+
+    // 🧠 Traductor automático de estados para la interfaz
+    public function getStatusEsAttribute(): string
+    {
+        return match($this->status) {
+            'draft' => 'Borrador',
+            'issued' => 'Timbrada',
+            'cancelled' => 'Cancelada',
+            default => 'Desconocido',
+        };
+    }
 
     public function client(): BelongsTo
     {
