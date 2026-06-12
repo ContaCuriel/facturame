@@ -16,7 +16,7 @@ class RequestSatXml extends Command
 
     public function handle()
     {
-        $empresas = Company::all();
+        $empresas = Company::all()->unique('rfc');
         $this->info("Iniciando solicitud de XMLs (Fase 2) para {$empresas->count()} empresas...");
 
         foreach ($empresas as $empresa) {

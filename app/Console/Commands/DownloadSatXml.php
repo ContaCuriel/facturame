@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\SatRequest;
 use App\Models\Gasto;
+use App\Models\Company;
 use App\Services\SatScraperService;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
@@ -13,11 +14,10 @@ use ZipArchive;
 class DownloadSatXml extends Command
 {
     protected $signature = 'sat:download-xml';
-    protected $description = 'FASE 2: Descarga los ZIPs de XML, guarda físicos y enriquece la BD';
+    protected $description = 'FASE 2: Descarga los ZIPs de XML, guarda físicos y enriquece la BD (Optimizado por RFC)';
 
     public function handle()
     {
-        // Buscamos solo los tickets de XML
         $pendingRequests = SatRequest::whereIn('status', ['pending', 'failed'])
                                      ->where('type', 'xml_gastos')
                                      ->with('company')
@@ -46,7 +46,7 @@ class DownloadSatXml extends Command
                 }
 
                 if ($resultado['status'] === 'downloaded') {
-                    $this->info("¡ZIP de XMLs descargado! Extrayendo archivos físicos...");
+                    $this->info("¡ZIP de XMLs descargado! Extrayendo archivos físicos y vinculando...");
                     
                     foreach ($resultado['files'] as $zipPath) {
                         $this->procesarZipXml($zipPath, $company->id);
@@ -69,11 +69,9 @@ class DownloadSatXml extends Command
 
         $zip = new ZipArchive;
         if ($zip->open($zipPath) === TRUE) {
-            
             for ($i = 0; $i < $zip->numFiles; $i++) {
                 $xmlName = $zip->getNameIndex($i);
                 
-                // Filtramos para leer solo archivos XML
                 if (strtolower(pathinfo($xmlName, PATHINFO_EXTENSION)) === 'xml') {
                     $xmlContent = $zip->getFromIndex($i);
                     $this->vincularXmlConBaseDeDatos($xmlContent, $companyId);
@@ -87,27 +85,70 @@ class DownloadSatXml extends Command
     private function vincularXmlConBaseDeDatos(string $xmlContent, int $companyId)
     {
         try {
-            $cleanXml = str_replace(['cfdi:', 'tfd:'], '', $xmlContent);
+            // 🛠️ TRUCO MAESTRO: Limpiamos todos los prefijos raros del SAT con expresiones regulares
+            $cleanXml = preg_replace('/(<\/?)(cfdi|tfd|nomina12|pago10|pago20):/i', '$1', $xmlContent);
             $xml = @simplexml_load_string($cleanXml);
-            if (!$xml) return;
+            
+            if (!$xml) {
+                $this->warn("❌ Se omitió un XML porque su estructura estaba corrupta.");
+                return;
+            }
 
             $comprobante = $xml->attributes();
-            $timbre = $xml->Complemento->TimbreFiscalDigital->attributes();
-            $uuid = strtoupper((string) $timbre['UUID']);
+            
+            // Extracción segura del UUID
+            $uuid = null;
+            if (isset($xml->Complemento->TimbreFiscalDigital)) {
+                $timbre = $xml->Complemento->TimbreFiscalDigital->attributes();
+                $uuid = strtoupper((string) $timbre['UUID']);
+            }
+            
+            if (!$uuid) {
+                $this->warn("❌ No se encontró el UUID dentro del XML.");
+                return;
+            }
 
-            // 1. Guardamos el archivo físico XML en el disco persistente
-            $xmlFileName = "gastos/{$companyId}/{$uuid}.xml";
+            // Extracción del RFC Receptor para la UNIFICACIÓN
+            $rfcReceptor = null;
+            if (isset($xml->Receptor)) {
+                $receptor = $xml->Receptor->attributes();
+                $rfcReceptor = (string) $receptor['Rfc'];
+            }
+
+            // Si el XML no trae RFC Receptor, usamos el de la empresa del ticket
+            if (!$rfcReceptor) {
+                $empresa = Company::find($companyId);
+                $rfcReceptor = $empresa->rfc;
+            }
+
+            // 1. Guardamos el archivo físico (usando la carpeta del RFC para ahorrar espacio)
+            $xmlFileName = "gastos/{$rfcReceptor}/{$uuid}.xml";
             Storage::disk('local')->put($xmlFileName, $xmlContent);
 
-            // 2. Buscamos el registro que la Fase 1 (Metadatos) ya había creado y lo actualizamos
-            Gasto::where('uuid', $uuid)->where('company_id', $companyId)->update([
-                'xml_path' => $xmlFileName, // Esto habilitará los conceptos en tu página web
-                'metodo_pago' => (string) ($comprobante['MetodoPago'] ?? 'N/A'),
-                'forma_pago' => (string) ($comprobante['FormaPago'] ?? 'N/A'),
-            ]);
+            // 2. UNIFICACIÓN: Buscamos TODAS las empresas en la BD que tengan este RFC
+            $companyIds = Company::where('rfc', $rfcReceptor)->pluck('id');
+
+            $actualizados = 0;
+            foreach ($companyIds as $cId) {
+                // Buscamos el registro de metadatos (Fase 1) y lo actualizamos con la ruta del XML
+                $gasto = Gasto::where('uuid', $uuid)->where('company_id', $cId)->first();
+                if ($gasto) {
+                    $gasto->update([
+                        'xml_path' => $xmlFileName,
+                        'metodo_pago' => (string) ($comprobante['MetodoPago'] ?? 'N/A'),
+                        'forma_pago' => (string) ($comprobante['FormaPago'] ?? 'N/A'),
+                    ]);
+                    $actualizados++;
+                }
+            }
+
+            if ($actualizados === 0) {
+                $this->warn("⚠️ El UUID {$uuid} bajó del SAT, pero no estaba en la base de datos (Quizá es de un mes que no pedimos metadatos).");
+            }
 
         } catch (Throwable $e) {
-            return; // Si el XML está corrupto, seguimos con el siguiente
+            $this->error("❌ Error grave procesando XML: " . $e->getMessage());
+            return;
         }
     }
 }

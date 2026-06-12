@@ -102,25 +102,29 @@ class DownloadSatGastos extends Command
 
                         $totalFinal = $tipoComprobante === 'E' ? -$total : $total;
 
-                        Gasto::updateOrCreate(
-                            [
-                                'company_id' => $companyId,
-                                'uuid' => $uuid,
-                            ],
-                            [
-                                'rfc_emisor' => $rfcEmisor,
-                                'nombre_emisor' => $nombreEmisor,
-                                'fecha_emision' => $fechaEmision,
-                                'subtotal' => $total, 
-                                'total' => $totalFinal,
-                                'metodo_pago' => 'N/A (Metadato)',
-                                'forma_pago' => 'N/A (Metadato)',
-                                'estado' => $estadoDocumento,
-                                'xml_path' => null 
-                            ]
-                        );
+                        // 🧠 Buscamos TODAS las empresas en tu BD que tengan este RFC
+                        $companyIds = \App\Models\Company::where('rfc', $rfcReceptor)->pluck('id');
 
-                    } catch (Throwable $e) {
+                        // Repartimos el gasto a cada una de ellas
+                        foreach ($companyIds as $cId) {
+                            Gasto::updateOrCreate(
+                                [
+                                    'company_id' => $cId,
+                                    'uuid' => $uuid,
+                                ],
+                                [
+                                    'rfc_emisor' => $rfcEmisor,
+                                    'nombre_emisor' => $nombreEmisor,
+                                    'fecha_emision' => $fechaEmision,
+                                    'subtotal' => $total, 
+                                    'total' => $totalFinal,
+                                    'metodo_pago' => 'N/A (Metadato)',
+                                    'forma_pago' => 'N/A (Metadato)',
+                                    'estado' => $estadoDocumento,
+                                    'xml_path' => null 
+                                ]
+                            );
+                        } catch (Throwable $e) {
                         continue; 
                     }
                 }

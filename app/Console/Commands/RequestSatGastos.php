@@ -17,12 +17,13 @@ class RequestSatGastos extends Command
 
     public function handle()
     {
-        // Traemos a las empresas que tienen FIEL
+        // Traemos a las empresas que tienen FIEL y agrupamos por RFC para no repetir peticiones
         $companies = Company::whereNotNull('fiel_cer_path')
                             ->whereNotNull('fiel_key_path')
-                            ->get();
+                            ->get()
+                            ->unique('rfc'); // 🧠 MAGIA: Filtramos para que solo haya 1 petición por RFC
 
-        $this->info("Iniciando solicitud de gastos para " . $companies->count() . " empresas...");
+        $this->info("Iniciando solicitud de gastos para " . $companies->count() . " empresas (RFCs únicos)...");
 
         foreach ($companies as $company) {
             $this->info("Analizando: {$company->name} (RFC: {$company->rfc})");
@@ -52,7 +53,7 @@ class RequestSatGastos extends Command
                 $requestId = $satService->solicitarDescargaDeGastos($fechaInicio, $fechaFin);
 
                 SatRequest::create([
-                    'company_id' => $company->id,
+                    'company_id' => $company->id, // Usamos esta empresa como "ancla" de la petición
                     'request_id' => $requestId,
                     'type' => 'gastos',
                     'status' => 'pending',
