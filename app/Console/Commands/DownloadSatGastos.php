@@ -75,49 +75,56 @@ class DownloadSatGastos extends Command
         $lines = explode("\n", $content);
 
         foreach ($lines as $line) {
-            // Los metadatos del SAT se separan con el caracter "|"
-            $data = explode("|", $line);
+            // 🛠️ EL SECRETO DEL SAT: Los metadatos vienen separados por tilde (~) no por pipe (|)
+            $data = explode("~", $line);
 
-            // Saltamos la cabecera del archivo o líneas vacías
-            if (count($data) < 11 || $data[0] === 'Uuid') continue;
+            // Saltamos si no tiene las columnas completas o si es el renglón de encabezados
+            if (count($data) < 11 || strpos($data[0], 'Uuid') !== false) continue;
 
             try {
+                // Mapeo exacto de las columnas del SAT para Metadatos
                 $uuid = strtoupper(trim($data[0]));
                 $rfcEmisor = trim($data[1]);
                 $nombreEmisor = trim($data[2]);
-                $rfcReceptor = trim($data[3]); // Utilizado para la Opción A (Centralizado)
+                $rfcReceptor = trim($data[3]);
                 $fechaEmision = trim($data[6]);
-                $total = (float) trim($data[10]);
-                $estadoDocumento = trim($data[11]) == '1' ? 'Vigente' : 'Cancelado';
+                $total = (float) trim($data[8]); // Columna 8 es el Monto
+                $tipoComprobante = trim($data[9]); // Columna 9 es I (Ingreso), E (Egreso), etc.
+                
+                // Columna 10 es el Estatus (1=Vigente, 0=Cancelado)
+                $estadoDocumento = trim($data[10]) == '1' ? 'Vigente' : 'Cancelado';
 
-                // Filtrar para registrar únicamente facturas Vigentes
+                // Filtros vitales: Solo queremos facturas Vigentes y que sean de tipo Ingreso o Egreso
                 if ($estadoDocumento !== 'Vigente') continue;
+                if (!in_array($tipoComprobante, ['I', 'E'])) continue;
 
-                // Guardamos en la base de datos indexando por el rfc_receptor (Opción A)
+                $totalFinal = $tipoComprobante === 'E' ? -$total : $total;
+
+                // Guardamos en la base de datos de forma limpia
                 Gasto::updateOrCreate(
                     [
-                        'company_id' => $companyId, // Mantenemos vinculación base
+                        'company_id' => $companyId,
                         'uuid' => $uuid,
                     ],
                     [
                         'rfc_emisor' => $rfcEmisor,
                         'nombre_emisor' => $nombreEmisor,
                         'fecha_emision' => $fechaEmision,
-                        'subtotal' => $total, // Los metadatos solo dan el Total; lo usamos como base referencial
-                        'total' => $total,
+                        'subtotal' => $total, // Metadatos solo dan Total, lo usamos como base
+                        'total' => $totalFinal,
                         'metodo_pago' => 'N/A (Metadato)',
                         'forma_pago' => 'N/A (Metadato)',
                         'estado' => $estadoDocumento,
-                        'xml_path' => null // Al ser metadato no hay archivo XML físico individual por ahora
+                        'xml_path' => null 
                     ]
                 );
 
             } catch (Throwable $e) {
-                continue; // Si un renglón viene dañado, lo saltamos y continuamos
+                continue; // Si un renglón viene dañado, lo saltamos silenciosamente
             }
         }
 
-        // Borramos el archivo temporal de metadatos una vez leído
+        // Borramos el archivo temporal una vez leído
         unlink($filePath);
     }
 }
