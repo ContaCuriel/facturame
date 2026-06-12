@@ -32,12 +32,14 @@ class RequestSatXml extends Command
                 // Le pasamos el parámetro 'xml' para activar el filtro de Vigentes
                 $requestId = $satService->solicitarDescargaDeGastos($fechaInicio, $fechaFin, 'xml');
 
-                // Guardamos el ticket con un tipo diferente ('xml_gastos')
+                // Guardamos el ticket con un tipo diferente ('xml_gastos') y sus fechas obligatorias
                 SatRequest::updateOrCreate(
                     ['company_id' => $empresa->id, 'type' => 'xml_gastos'],
                     [
                         'request_id' => $requestId,
                         'status' => 'pending',
+                        'fecha_inicio' => $fechaInicio->format('Y-m-d H:i:s'),
+                        'fecha_fin' => $fechaFin->format('Y-m-d H:i:s'),
                         'mensaje_sat' => 'Ticket de XML recibido. Esperando a que el SAT prepare el paquete ZIP.'
                     ]
                 );
