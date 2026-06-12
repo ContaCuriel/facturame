@@ -92,68 +92,9 @@ class SatScraperService
     public function verificarYDescargar(string $requestId)
     {
         $satService = $this->getSatService();
-
-        // 1. Verificamos cómo va la solicitud en el SAT
         $verifyResult = $satService->verify($requestId);
 
-        if (!$verifyResult->getStatus()->isAccepted()) {
-            throw new Exception("El ticket fue rechazado o no es válido.");
-        }
-
-        // Revisamos el código de respuesta del SAT
-        $estadoSat = $verifyResult->getCodeRequest()->getValue();
-
-        // 5004 significa que el rango de fechas no tiene ninguna factura
-        if ($estadoSat === '5004') {
-            return ['status' => 'no_data', 'message' => 'No se encontraron facturas en esas fechas.'];
-        }
-
-        // Si el SAT todavía no termina de empaquetar, avisamos que sigue pendiente
-        if (!$verifyResult->getStatusRequest()->isFinished()) {
-            return ['status' => 'pending', 'message' => 'El SAT aún está procesando el paquete (Estado: ' . $estadoSat . ').'];
-        }
-
-        // 2. Si ya terminó (isFinished), obtenemos los IDs de los archivos correspondientes de forma segura
-        $packageIds = [];
-
-        // Forma nativa de la librería para iterar sobre los paquetes devueltos (Metadatos o XML)
-        foreach ($verifyResult->getPackages() as $package) {
-            $packageIds[] = $package->getPackageId();
-        }
-
-        // Si por alguna razón la colección viene vacía, usamos los métodos directos como plan de respaldo
-        if (empty($packageIds)) {
-            if (method_exists($verifyResult, 'getPackageIds')) {
-                $packageIds = $verifyResult->getPackageIds();
-            }
-        }
-        
-        if (empty($packageIds)) {
-            return ['status' => 'error', 'message' => 'El SAT dice que terminó pero no se encontraron IDs de paquetes disponibles.'];
-        }
-
-        $archivosDescargados = [];
-
-        // 3. Descargamos el o los paquetes devueltos
-        foreach ($packageIds as $packageId) {
-            $downloadResult = $satService->download($packageId);
-            
-            if (!$downloadResult->getStatus()->isAccepted()) {
-                continue;
-            }
-
-            // Guardamos el contenido (sea ZIP de XML o archivo de Metadata) en el disco local
-            $packageContent = $downloadResult->getPackageContent();
-            $fileName = "sat_downloads/{$this->company->id}_{$packageId}.txt"; // Lo guardamos genérico como txt/zip temporal
-            Storage::disk('local')->put($fileName, $packageContent);
-            
-            $archivosDescargados[] = Storage::disk('local')->path($fileName);
-        }
-
-        return [
-            'status' => 'downloaded', 
-            'message' => 'Información descargada con éxito desde el SAT.',
-            'files' => $archivosDescargados
-        ];
+        // 🕵️‍♂️ TRUCO DETECTIVE: Imprimir la lista exacta de funciones y detener el programa
+        dd(get_class_methods($verifyResult));
     }
 }
