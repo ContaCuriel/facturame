@@ -61,11 +61,7 @@ class SatScraperService
     /**
      * PASO A: Solicitar al SAT que prepare el paquete de facturas recibidas (Gastos)
      */
-    public function solicitarDescargaDeGastos(DateTimeImmutable $fechaInicio, DateTimeImmutable $fechaFin)
-    {
-        $satService = $this->getSatService();
-
-       // Buscamos facturas RECIBIDAS (Gastos) y ordenamos los parámetros según la librería
+  // Buscamos facturas RECIBIDAS (Gastos) adaptado para las nuevas reglas del SAT v1.5
         $query = \PhpCfdi\SatWsDescargaMasiva\Services\Query\QueryParameters::create(
             DateTimePeriod::create(
                 \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaInicio->format('Y-m-d H:i:s')),
@@ -73,8 +69,8 @@ class SatScraperService
             ),
             DownloadType::received(),
             RequestType::xml(),
-            \PhpCfdi\SatWsDescargaMasiva\Shared\ServiceType::cfdi(), // <-- 1. Primero va el tipo de servicio (CFDI)
-            \PhpCfdi\SatWsDescargaMasiva\Shared\DocumentStatus::active() // <-- 2. Luego el estado (Vigentes)
+            \PhpCfdi\SatWsDescargaMasiva\Shared\ServiceType::cfdi(),
+            \PhpCfdi\SatWsDescargaMasiva\Shared\DocumentStatus::undefined() // <-- Cambiamos active() por undefined() para cumplir la nueva regla del SAT
         );
         // Enviamos la petición al SAT
         $requestResult = $satService->query($query);
