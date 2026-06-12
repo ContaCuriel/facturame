@@ -31,7 +31,7 @@
                                     {{ $gasto->fecha_emision->format('d/m/Y') }}
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">
-                                    <span class="font-bold block">{{ $gasto->nombre_emisor ?: 'Proveedor Desconocido' }}</span>
+                                    <a href="{{ route('gastos.show', $gasto) }}" class="font-bold block text-blue-600 hover:underline">{{ $gasto->nombre_emisor ?: 'Proveedor Desconocido' }}</a>
                                     <span class="text-xs text-gray-500 dark:text-gray-400">RFC: {{ $gasto->rfc_emisor }}</span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
