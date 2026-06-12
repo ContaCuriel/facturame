@@ -5,15 +5,19 @@ namespace App\Http\Controllers;
 use App\Models\Company;
 use App\Models\Gasto;
 use Illuminate\Http\Request;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests; // <-- 1. Importamos la clase
 
 class GastoController extends Controller
 {
+    use AuthorizesRequests; // <-- 2. Le damos el superpoder de autorizar al controlador
+
     public function index(Request $request)
     {
         // Obtenemos la empresa actual
         $company_id = $request->input('company_id');
         $company = Company::findOrFail($company_id);
 
+        // Verificamos que el usuario tenga permiso de ver esta empresa
         $this->authorize('view', $company);
 
         // Traemos los gastos ordenados de más reciente a más antiguo
@@ -23,6 +27,4 @@ class GastoController extends Controller
 
         return view('gastos.index', compact('company', 'gastos'));
     }
-
-    // Aquí después agregaremos la función show() si queremos ver el detalle de un gasto
 }
