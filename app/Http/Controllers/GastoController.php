@@ -33,25 +33,56 @@ class GastoController extends Controller
         $this->authorize('view', $company);
 
         $conceptos = [];
+        $impuestos = [
+            'trasladados' => [],
+            'retenidos' => []
+        ];
 
-        // Si el archivo XML existe, lo abrimos y extraemos los conceptos en tiempo real
+        // Si el archivo XML existe, lo abrimos y extraemos todo en tiempo real
         if ($gasto->xml_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($gasto->xml_path)) {
             $xmlContent = \Illuminate\Support\Facades\Storage::disk('local')->get($gasto->xml_path);
-            $cleanXml = str_replace(['cfdi:', 'tfd:'], '', $xmlContent);
+            $cleanXml = str_replace(['cfdi:', 'tfd:', 'ine:'], '', $xmlContent);
             $xml = simplexml_load_string($cleanXml);
 
-            if ($xml && isset($xml->Conceptos->Concepto)) {
-                foreach ($xml->Conceptos->Concepto as $concepto) {
-                    $conceptos[] = [
-                        'cantidad' => (string) $concepto['Cantidad'],
-                        'unidad' => (string) $concepto['ClaveUnidad'],
-                        'descripcion' => (string) $concepto['Descripcion'],
-                        'precio_unitario' => (float) $concepto['ValorUnitario'],
-                        'importe' => (float) $concepto['Importe'],
-                    ];
+            if ($xml) {
+                // 1. Extraer Conceptos
+                if (isset($xml->Conceptos->Concepto)) {
+                    foreach ($xml->Conceptos->Concepto as $concepto) {
+                        $conceptos[] = [
+                            'cantidad' => (string) $concepto['Cantidad'],
+                            'unidad' => (string) $concepto['ClaveUnidad'],
+                            'descripcion' => (string) $concepto['Descripcion'],
+                            'precio_unitario' => (float) $concepto['ValorUnitario'],
+                            'importe' => (float) $concepto['Importe'],
+                        ];
+                    }
+                }
+
+                // 2. Extraer Impuestos Globales
+                if (isset($xml->Impuestos)) {
+                    // Trasladados (Ej. IVA)
+                    if (isset($xml->Impuestos->Traslados->Traslado)) {
+                        foreach ($xml->Impuestos->Traslados->Traslado as $traslado) {
+                            $impuestos['trasladados'][] = [
+                                'impuesto' => (string) $traslado['Impuesto'], // 002 = IVA
+                                'tasa' => (string) $traslado['TasaOCuota'],
+                                'importe' => (float) $traslado['Importe'],
+                            ];
+                        }
+                    }
+                    // Retenidos (Ej. ISR, Retención IVA)
+                    if (isset($xml->Impuestos->Retenciones->Retencion)) {
+                        foreach ($xml->Impuestos->Retenciones->Retencion as $retencion) {
+                            $impuestos['retenidos'][] = [
+                                'impuesto' => (string) $retencion['Impuesto'],
+                                'importe' => (float) $retencion['Importe'],
+                            ];
+                        }
+                    }
                 }
             }
         }
 
-        return view('gastos.show', compact('company', 'gasto', 'conceptos'));
+        return view('gastos.show', compact('company', 'gasto', 'conceptos', 'impuestos'));
     }
+}    

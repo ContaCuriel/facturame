@@ -68,10 +68,35 @@
 
                 <div class="mt-6 flex justify-end">
                     <div class="w-full max-w-xs space-y-2 text-sm text-gray-600 dark:text-gray-200">
-                        <div class="flex justify-between"><span>Subtotal:</span> <span class="dark:text-white">${{ number_format($gasto->subtotal, 2) }}</span></div>
+                        <div class="flex justify-between">
+                            <span>Subtotal:</span> 
+                            <span class="dark:text-white">${{ number_format($gasto->subtotal, 2) }}</span>
+                        </div>
+                        
+                        {{-- IMPUESTOS TRASLADADOS (SUMAN) --}}
+                        @foreach($impuestos['trasladados'] as $traslado)
+                            <div class="flex justify-between text-green-600 dark:text-green-400">
+                                <span>
+                                    Impuesto ({{ $traslado['impuesto'] === '002' ? 'IVA' : ($traslado['impuesto'] === '003' ? 'IEPS' : $traslado['impuesto']) }} {{ (float)$traslado['tasa'] * 100 }}%):
+                                </span> 
+                                <span>${{ number_format($traslado['importe'], 2) }}</span>
+                            </div>
+                        @endforeach
+
+                        {{-- IMPUESTOS RETENIDOS (RESTAN) --}}
+                        @foreach($impuestos['retenidos'] as $retencion)
+                            <div class="flex justify-between text-red-600 dark:text-red-400">
+                                <span>
+                                    Retención ({{ $retencion['impuesto'] === '001' ? 'ISR' : ($retencion['impuesto'] === '002' ? 'IVA' : $retencion['impuesto']) }}):
+                                </span> 
+                                <span>- ${{ number_format($retencion['importe'], 2) }}</span>
+                            </div>
+                        @endforeach
+
                         <hr class="dark:border-gray-600 my-2">
                         <div class="flex justify-between text-xl font-bold text-gray-900 dark:text-white mt-2">
-                            <span>TOTAL:</span> <span>${{ number_format($gasto->total, 2) }}</span>
+                            <span>TOTAL:</span> 
+                            <span>${{ number_format($gasto->total, 2) }}</span>
                         </div>
                     </div>
                 </div>
