@@ -10,6 +10,7 @@
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                 
+                {{-- COLUMNA 1: SELLO DIGITAL (CSD) --}}
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-8">
                     <div class="flex items-center mb-6">
                         <div class="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mr-4">
@@ -53,6 +54,7 @@
                     </form>
                 </div>
 
+                {{-- COLUMNA 2: E.FIRMA (FIEL) Y DESCARGAS --}}
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-8">
                     <div class="flex items-center mb-6">
                         <div class="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mr-4">
@@ -90,22 +92,71 @@
                             <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Contraseña de la e.firma</label>
                             <input type="password" name="fiel_password" class="w-full rounded-xl border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500 shadow-sm" required placeholder="••••••••">
                         </div>
+                        
                         <div class="mt-6 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
-    <h4 class="text-md font-bold text-blue-800 dark:text-blue-300 mb-2">📥 Sincronización Automática de Gastos</h4>
-    <p class="text-sm text-blue-600 dark:text-blue-400 mb-4">
-        Selecciona desde qué fecha quieres que nuestro sistema descargue tus facturas recibidas (histórico). 
-        A partir de esta fecha, el sistema se mantendrá actualizado automáticamente todos los días.
-    </p>
-    
-    <div>
-        <label for="fecha_inicio_descarga_gastos" class="block font-medium text-sm text-gray-700 dark:text-gray-300">
-            Fecha inicial de descarga
-        </label>
-        <input type="date" id="fecha_inicio_descarga_gastos" name="fecha_inicio_descarga_gastos" 
-               value="{{ old('fecha_inicio_descarga_gastos', $company->fecha_inicio_descarga_gastos?->format('Y-m-d')) }}"
-               class="block mt-1 w-full md:w-1/2 rounded-md shadow-sm border-gray-300 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-300">
-    </div>
-</div>
+                            <h4 class="text-md font-bold text-blue-800 dark:text-blue-300 mb-2">📥 Sincronización Automática de Gastos</h4>
+                            <p class="text-sm text-blue-600 dark:text-blue-400 mb-4">
+                                Selecciona desde qué fecha quieres que nuestro sistema descargue tus facturas recibidas (histórico). 
+                                A partir de esta fecha, el sistema se mantendrá actualizado automáticamente todos los días.
+                            </p>
+                            
+                            <div>
+                                <label for="fecha_inicio_descarga_gastos" class="block font-medium text-sm text-gray-700 dark:text-gray-300">
+                                    Fecha inicial de descarga
+                                </label>
+                                <input type="date" id="fecha_inicio_descarga_gastos" name="fecha_inicio_descarga_gastos" 
+                                       value="{{ old('fecha_inicio_descarga_gastos', $company->fecha_inicio_descarga_gastos?->format('Y-m-d')) }}"
+                                       class="block mt-1 w-full md:w-1/2 rounded-md shadow-sm border-gray-300 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-300">
+                            </div>
+                        </div>
+
+                        {{-- SEMÁFORO DE SINCRONIZACIÓN AUTOMÁTICA --}}
+                        @php
+                            $lastSync = \App\Models\SatRequest::where('company_id', $company->id)
+                                ->where('type', 'gastos')
+                                ->orderBy('created_at', 'desc')
+                                ->first();
+                        @endphp
+
+                        <div class="mt-5 mb-6">
+                            @if(!$lastSync)
+                                <div class="flex items-center p-3 text-sm text-gray-600 bg-gray-100 border border-gray-300 rounded-md dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 shadow-sm">
+                                    <span class="text-3xl mr-4">⏳</span>
+                                    <div>
+                                        <p class="font-bold text-gray-800 dark:text-gray-200">Esperando primera ejecución</p>
+                                        <p class="text-xs mt-1">El robot solicitará tu historial de facturas esta madrugada a las 2:00 AM.</p>
+                                    </div>
+                                </div>
+                            @elseif($lastSync->status === 'pending')
+                                <div class="flex items-center p-3 text-sm text-yellow-700 bg-yellow-50 border border-yellow-300 rounded-md dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-700 shadow-sm">
+                                    <span class="text-3xl mr-4">🟡</span>
+                                    <div>
+                                        <p class="font-bold text-yellow-800 dark:text-yellow-400">Procesando en el SAT...</p>
+                                        <p class="text-xs mt-1">Ticket recibido. Esperando a que el SAT prepare el paquete ZIP.</p>
+                                        <p class="text-xs mt-1 opacity-80">Última actualización: {{ $lastSync->updated_at->format('d/m/Y h:i A') }}</p>
+                                    </div>
+                                </div>
+                            @elseif($lastSync->status === 'downloaded' || $lastSync->status === 'no_data')
+                                <div class="flex items-center p-3 text-sm text-green-700 bg-green-50 border border-green-300 rounded-md dark:bg-green-900/40 dark:text-green-300 dark:border-green-700 shadow-sm">
+                                    <span class="text-3xl mr-4">🟢</span>
+                                    <div>
+                                        <p class="font-bold text-green-800 dark:text-green-400">Sincronización al día</p>
+                                        <p class="text-xs mt-1">{{ $lastSync->mensaje_sat ?? 'Gastos actualizados correctamente.' }}</p>
+                                        <p class="text-xs mt-1 opacity-80">Última descarga: {{ $lastSync->updated_at->format('d/m/Y h:i A') }}</p>
+                                    </div>
+                                </div>
+                            @else
+                                <div class="flex items-center p-3 text-sm text-red-700 bg-red-50 border border-red-300 rounded-md dark:bg-red-900/40 dark:text-red-300 dark:border-red-700 shadow-sm">
+                                    <span class="text-3xl mr-4">🔴</span>
+                                    <div>
+                                        <p class="font-bold text-red-800 dark:text-red-400">Error en la última sincronización</p>
+                                        <p class="text-xs mt-1">{{ $lastSync->mensaje_sat ?? 'Ocurrió un problema de conexión con el SAT.' }}</p>
+                                        <p class="text-xs mt-1 opacity-80">Fecha del error: {{ $lastSync->updated_at->format('d/m/Y h:i A') }}</p>
+                                    </div>
+                                </div>
+                            @endif
+                        </div>
+
                         <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-xl transition shadow-md">
                             Subir / Actualizar e.firma
                         </button>
