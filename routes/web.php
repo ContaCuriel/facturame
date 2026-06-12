@@ -9,6 +9,7 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\SatCatalogController;
 use App\Http\Controllers\StudentController;
 use Illuminate\Support\Facades\Artisan;
+use App\Http\Controllers\GastoController;
 
 Route::get('/', function () {
     return view('auth.login');
@@ -40,6 +41,7 @@ Route::middleware('auth')->group(function () {
     Route::resource('products', ProductController::class);
     Route::resource('invoices', InvoiceController::class);
     Route::resource('students', StudentController::class);
+    Route::resource('gastos', GastoController::class);
 
     // Rutas de Configuración
     Route::get('/companies/{company}/csd', [CompanyController::class, 'showCsdForm'])->name('companies.csd.form');

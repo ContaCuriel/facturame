@@ -25,8 +25,14 @@
                         Dashboard
                     </a>
                     <a href="{{ route('invoices.index', ['company_id' => $company->id]) }}" class="flex items-center px-4 py-2 mt-2 text-sm hover:bg-gray-200 dark:hover:bg-gray-700 {{ request()->routeIs('invoices.*') ? 'bg-gray-200 dark:bg-gray-700 font-semibold' : '' }}">
-                        Facturación
+                        Facturación (Ingresos)
                     </a>
+
+                    {{-- ✅ NUEVO ENLACE PARA GASTOS --}}
+                    <a href="{{ route('gastos.index', ['company_id' => $company->id]) }}" class="flex items-center px-4 py-2 mt-2 text-sm hover:bg-gray-200 dark:hover:bg-gray-700 {{ request()->routeIs('gastos.*') ? 'bg-gray-200 dark:bg-gray-700 font-semibold' : '' }}">
+                        Gastos (Recibidas)
+                    </a>
+
                     <a href="{{ route('clients.index', ['company_id' => $company->id]) }}" class="flex items-center px-4 py-2 mt-2 text-sm hover:bg-gray-200 dark:hover:bg-gray-700 {{ request()->routeIs('clients.*') ? 'bg-gray-200 dark:bg-gray-700 font-semibold' : '' }}">
                         Clientes
                     </a>
@@ -42,7 +48,6 @@
                     <a href="{{ route('companies.logo.form', $company) }}" class="flex items-center px-4 py-2 mt-2 text-sm hover:bg-gray-200 dark:hover:bg-gray-700 {{ request()->routeIs('companies.logo.*') ? 'bg-gray-200 dark:bg-gray-700 font-semibold' : '' }}">
                         Logo y Apariencia
                     </a>
-                    {{-- ✅ --- ENLACE CORREGIDO --- ✅ --}}
                     <a href="{{ route('companies.index') }}" class="flex items-center px-4 py-2 mt-8 text-sm hover:bg-gray-200 dark:hover:bg-gray-700 border-t dark:border-gray-700">
                         Ver todas las empresas
                     </a>
