@@ -87,9 +87,6 @@ class SatScraperService
     }
 
     /**
-     * PASO B: Preguntar al SAT el estado de un ticket y descargar el ZIP si está listo.
-     */
-    /**
      * PASO B: Preguntar al SAT el estado de un ticket y descargar el archivo si está listo.
      */
     public function verificarYDescargar(string $requestId)
@@ -116,11 +113,20 @@ class SatScraperService
             return ['status' => 'pending', 'message' => 'El SAT aún está procesando el paquete (Estado: ' . $estadoSat . ').'];
         }
 
-        // 2. Si ya terminó (isFinished), obtenemos los IDs de los archivos correspondientes
-        // Soportamos tanto paquetes de XML (plural) como paquetes de Metadata (singular)
-        $packageIds = method_exists($verifyResult, 'getPackageIds') 
-            ? $verifyResult->getPackageIds() 
-            : ($verifyResult->getPackageId() ? [$verifyResult->getPackageId()] : []);
+        // 2. Si ya terminó (isFinished), obtenemos los IDs de los archivos correspondientes de forma segura
+        $packageIds = [];
+
+        // Forma nativa de la librería para iterar sobre los paquetes devueltos (Metadatos o XML)
+        foreach ($verifyResult->getPackages() as $package) {
+            $packageIds[] = $package->getPackageId();
+        }
+
+        // Si por alguna razón la colección viene vacía, usamos los métodos directos como plan de respaldo
+        if (empty($packageIds)) {
+            if (method_exists($verifyResult, 'getPackageIds')) {
+                $packageIds = $verifyResult->getPackageIds();
+            }
+        }
         
         if (empty($packageIds)) {
             return ['status' => 'error', 'message' => 'El SAT dice que terminó pero no se encontraron IDs de paquetes disponibles.'];
