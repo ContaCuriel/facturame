@@ -74,57 +74,7 @@ class DownloadSatGastos extends Command
         $content = file_get_contents($filePath);
         $lines = explode("\n", $content);
 
-        foreach ($lines as $line) {
-            // 🛠️ EL SECRETO DEL SAT: Los metadatos vienen separados por tilde (~) no por pipe (|)
-            $data = explode("~", $line);
-
-            // Saltamos si no tiene las columnas completas o si es el renglón de encabezados
-            if (count($data) < 11 || strpos($data[0], 'Uuid') !== false) continue;
-
-            try {
-                // Mapeo exacto de las columnas del SAT para Metadatos
-                $uuid = strtoupper(trim($data[0]));
-                $rfcEmisor = trim($data[1]);
-                $nombreEmisor = trim($data[2]);
-                $rfcReceptor = trim($data[3]);
-                $fechaEmision = trim($data[6]);
-                $total = (float) trim($data[8]); // Columna 8 es el Monto
-                $tipoComprobante = trim($data[9]); // Columna 9 es I (Ingreso), E (Egreso), etc.
-                
-                // Columna 10 es el Estatus (1=Vigente, 0=Cancelado)
-                $estadoDocumento = trim($data[10]) == '1' ? 'Vigente' : 'Cancelado';
-
-                // Filtros vitales: Solo queremos facturas Vigentes y que sean de tipo Ingreso o Egreso
-                if ($estadoDocumento !== 'Vigente') continue;
-                if (!in_array($tipoComprobante, ['I', 'E'])) continue;
-
-                $totalFinal = $tipoComprobante === 'E' ? -$total : $total;
-
-                // Guardamos en la base de datos de forma limpia
-                Gasto::updateOrCreate(
-                    [
-                        'company_id' => $companyId,
-                        'uuid' => $uuid,
-                    ],
-                    [
-                        'rfc_emisor' => $rfcEmisor,
-                        'nombre_emisor' => $nombreEmisor,
-                        'fecha_emision' => $fechaEmision,
-                        'subtotal' => $total, // Metadatos solo dan Total, lo usamos como base
-                        'total' => $totalFinal,
-                        'metodo_pago' => 'N/A (Metadato)',
-                        'forma_pago' => 'N/A (Metadato)',
-                        'estado' => $estadoDocumento,
-                        'xml_path' => null 
-                    ]
-                );
-
-            } catch (Throwable $e) {
-                continue; // Si un renglón viene dañado, lo saltamos silenciosamente
-            }
-        }
-
-        // Borramos el archivo temporal una vez leído
-        unlink($filePath);
+        // 🕵️‍♂️ TRUCO DETECTIVE: Imprimir los primeros 3 renglones del archivo y detenerse
+        dd(array_slice($lines, 0, 3));
     }
 }
