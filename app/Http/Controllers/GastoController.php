@@ -5,11 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Company;
 use App\Models\Gasto;
 use Illuminate\Http\Request;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests; // <-- 1. Importamos la clase
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class GastoController extends Controller
 {
-    use AuthorizesRequests; // <-- 2. Le damos el superpoder de autorizar al controlador
+    use AuthorizesRequests;
 
     public function index(Request $request)
     {
@@ -27,6 +27,7 @@ class GastoController extends Controller
 
         return view('gastos.index', compact('company', 'gastos'));
     }
+
     public function show(Gasto $gasto)
     {
         $company = $gasto->company;
@@ -41,8 +42,10 @@ class GastoController extends Controller
         // Si el archivo XML existe, lo abrimos y extraemos todo en tiempo real
         if ($gasto->xml_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($gasto->xml_path)) {
             $xmlContent = \Illuminate\Support\Facades\Storage::disk('local')->get($gasto->xml_path);
-            $cleanXml = str_replace(['cfdi:', 'tfd:', 'ine:'], '', $xmlContent);
-            $xml = simplexml_load_string($cleanXml);
+            
+            // 🛠️ TRUCO MAESTRO: Expresión regular que aniquila cualquier prefijo del SAT (cfdi, tfd, pago, nomina, ine, etc.)
+            $cleanXml = preg_replace('/(<\/?)(cfdi|tfd|nomina12|pago10|pago20|ine):/i', '$1', $xmlContent);
+            $xml = @simplexml_load_string($cleanXml);
 
             if ($xml) {
                 // 1. Extraer Conceptos
@@ -85,4 +88,4 @@ class GastoController extends Controller
 
         return view('gastos.show', compact('company', 'gasto', 'conceptos', 'impuestos'));
     }
-}    
+}
