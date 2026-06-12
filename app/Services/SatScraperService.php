@@ -64,14 +64,14 @@ class SatScraperService
     {
         $satService = $this->getSatService();
 
-        // Buscamos facturas RECIBIDAS (Gastos) adaptado para las nuevas reglas del SAT v1.5
+        // Buscamos facturas RECIBIDAS (Gastos) solicitando METADATA para evitar bloqueos por facturas canceladas
         $query = \PhpCfdi\SatWsDescargaMasiva\Services\Query\QueryParameters::create(
             DateTimePeriod::create(
                 \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaInicio->format('Y-m-d H:i:s')),
                 \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaFin->format('Y-m-d H:i:s'))
             ),
             DownloadType::received(),
-            RequestType::xml(),
+            RequestType::metadata(), // <-- CAMBIAMOS DE xml() A metadata()
             \PhpCfdi\SatWsDescargaMasiva\Shared\ServiceType::cfdi(),
             \PhpCfdi\SatWsDescargaMasiva\Shared\DocumentStatus::undefined()
         );
