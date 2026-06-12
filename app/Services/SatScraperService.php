@@ -33,7 +33,7 @@ class SatScraperService
             throw new Exception('La empresa no tiene la FIEL configurada o está incompleta.');
         }
 
-        // CORRECCIÓN: Buscamos primero en el disco 'private' (donde realmente se guardaron)
+        // Buscamos primero en el disco 'private' (disco persistente)
         $cerContents = Storage::disk('private')->get($this->company->fiel_cer_path) 
                     ?? Storage::disk('local')->get($this->company->fiel_cer_path);
                     
@@ -44,7 +44,7 @@ class SatScraperService
             throw new Exception("No se encontraron los archivos físicos de la FIEL en el servidor.");
         }
         
-        // Desencriptamos la contraseña que guardamos de forma segura
+        // Desencriptamos la contraseña
         $password = Crypt::decryptString($this->company->fiel_password);
 
         // Creamos la firma electrónica
@@ -54,14 +54,17 @@ class SatScraperService
         $webClient = new GuzzleWebClient();
         $requestBuilder = new FielRequestBuilder($fiel);
 
-        // Retornamos el servicio listo para hacer peticiones
         return new Service($requestBuilder, $webClient);
     }
 
     /**
      * PASO A: Solicitar al SAT que prepare el paquete de facturas recibidas (Gastos)
      */
-  // Buscamos facturas RECIBIDAS (Gastos) adaptado para las nuevas reglas del SAT v1.5
+    public function solicitarDescargaDeGastos(DateTimeImmutable $fechaInicio, DateTimeImmutable $fechaFin)
+    {
+        $satService = $this->getSatService();
+
+        // Buscamos facturas RECIBIDAS (Gastos) adaptado para las nuevas reglas del SAT v1.5
         $query = \PhpCfdi\SatWsDescargaMasiva\Services\Query\QueryParameters::create(
             DateTimePeriod::create(
                 \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaInicio->format('Y-m-d H:i:s')),
@@ -70,8 +73,9 @@ class SatScraperService
             DownloadType::received(),
             RequestType::xml(),
             \PhpCfdi\SatWsDescargaMasiva\Shared\ServiceType::cfdi(),
-            \PhpCfdi\SatWsDescargaMasiva\Shared\DocumentStatus::undefined() // <-- Cambiamos active() por undefined() para cumplir la nueva regla del SAT
+            \PhpCfdi\SatWsDescargaMasiva\Shared\DocumentStatus::undefined()
         );
+
         // Enviamos la petición al SAT
         $requestResult = $satService->query($query);
 
@@ -79,7 +83,6 @@ class SatScraperService
             throw new Exception('El SAT rechazó la solicitud: ' . $requestResult->getStatus()->getMessage());
         }
 
-        // El SAT nos devuelve un ID de solicitud. Con este ID luego iremos a preguntar si ya está listo.
         return $requestResult->getRequestId();
     }
 
@@ -99,7 +102,6 @@ class SatScraperService
 
         $estadoSat = $verifyResult->getCodeRequest()->getValue();
 
-        // 5000 = Solicitud recibida, 5002 = Agotó intentos, 5003 = Tope superado, 5004 = No hay información
         if ($estadoSat === '5004') {
             return ['status' => 'no_data', 'message' => 'No se encontraron facturas en esas fechas.'];
         }
@@ -122,7 +124,7 @@ class SatScraperService
             $downloadResult = $satService->download($packageId);
             
             if (!$downloadResult->getStatus()->isAccepted()) {
-                continue; // Si falla uno, intentamos con el siguiente
+                continue;
             }
 
             // Guardamos el ZIP temporalmente en el disco local
