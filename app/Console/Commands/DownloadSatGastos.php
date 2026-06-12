@@ -5,15 +5,16 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\SatRequest;
 use App\Models\Gasto;
+use App\Models\Company;
 use App\Services\SatScraperService;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
-use ZipArchive; // <-- IMPORTANTE: Agregamos el manejador de ZIPs
+use ZipArchive;
 
 class DownloadSatGastos extends Command
 {
     protected $signature = 'sat:download-gastos';
-    protected $description = 'Verifica el estado de las solicitudes al SAT, descarga los Metadatos y guarda los gastos en la BD';
+    protected $description = 'FASE 1: Descarga Metadatos y guarda los gastos en la BD (Optimizado por RFC)';
 
     public function handle()
     {
@@ -62,9 +63,6 @@ class DownloadSatGastos extends Command
         }
     }
 
-    /**
-     * Abre el ZIP del SAT, lee el archivo .txt de adentro y procesa los renglones
-     */
     private function procesarMetadatosZip(string $zipPath, int $companyId)
     {
         if (!file_exists($zipPath)) return;
@@ -72,17 +70,14 @@ class DownloadSatGastos extends Command
         $zip = new ZipArchive;
         if ($zip->open($zipPath) === TRUE) {
             
-            // Recorremos los archivos dentro del ZIP (normalmente solo viene 1 archivo .txt)
             for ($i = 0; $i < $zip->numFiles; $i++) {
                 
-                // Extraemos el texto crudo directamente desde el ZIP a la memoria
                 $content = $zip->getFromIndex($i);
                 if (empty($content)) continue;
 
                 $lines = explode("\n", $content);
 
                 foreach ($lines as $line) {
-                    // Cortamos con la tilde mágica del SAT
                     $data = explode("~", $line);
 
                     if (count($data) < 11 || strpos($data[0], 'Uuid') !== false) continue;
@@ -103,7 +98,7 @@ class DownloadSatGastos extends Command
                         $totalFinal = $tipoComprobante === 'E' ? -$total : $total;
 
                         // 🧠 Buscamos TODAS las empresas en tu BD que tengan este RFC
-                        $companyIds = \App\Models\Company::where('rfc', $rfcReceptor)->pluck('id');
+                        $companyIds = Company::where('rfc', $rfcReceptor)->pluck('id');
 
                         // Repartimos el gasto a cada una de ellas
                         foreach ($companyIds as $cId) {
@@ -124,7 +119,9 @@ class DownloadSatGastos extends Command
                                     'xml_path' => null 
                                 ]
                             );
-                        } catch (Throwable $e) {
+                        }
+
+                    } catch (Throwable $e) {
                         continue; 
                     }
                 }
@@ -132,7 +129,6 @@ class DownloadSatGastos extends Command
             $zip->close();
         }
 
-        // Borramos el ZIP temporal del servidor
         unlink($zipPath);
     }
 }
