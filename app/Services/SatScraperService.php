@@ -65,16 +65,17 @@ class SatScraperService
     {
         $satService = $this->getSatService();
 
-       // Buscamos facturas RECIBIDAS (Gastos)
+       // Buscamos facturas RECIBIDAS (Gastos) y le especificamos al SAT que SOLO queremos las VIGENTES
         $query = \PhpCfdi\SatWsDescargaMasiva\Services\Query\QueryParameters::create(
             DateTimePeriod::create(
                 \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaInicio->format('Y-m-d H:i:s')),
                 \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaFin->format('Y-m-d H:i:s'))
             ),
             DownloadType::received(),
-            RequestType::xml()
+            RequestType::xml(),
+            \PhpCfdi\SatWsDescargaMasiva\Shared\DocumentType::undefined(),
+            \PhpCfdi\SatWsDescargaMasiva\Shared\DocumentStatus::active() // <-- EL SECRETO ESTÁ AQUÍ
         );
-
         // Enviamos la petición al SAT
         $requestResult = $satService->query($query);
 
