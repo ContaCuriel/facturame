@@ -65,9 +65,12 @@ class SatScraperService
     {
         $satService = $this->getSatService();
 
-        // Buscamos facturas RECIBIDAS (Gastos)
+       // Buscamos facturas RECIBIDAS (Gastos)
         $query = \PhpCfdi\SatWsDescargaMasiva\Services\Query\QueryParameters::create(
-            DateTimePeriod::create($fechaInicio, $fechaFin),
+            DateTimePeriod::create(
+                \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaInicio->format('Y-m-d H:i:s')),
+                \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaFin->format('Y-m-d H:i:s'))
+            ),
             DownloadType::received(),
             RequestType::xml()
         );
