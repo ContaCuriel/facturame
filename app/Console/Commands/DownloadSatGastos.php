@@ -6,24 +6,23 @@ use Illuminate\Console\Command;
 use App\Models\SatRequest;
 use App\Models\Gasto;
 use App\Services\SatScraperService;
-use ZipArchive;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class DownloadSatGastos extends Command
 {
     protected $signature = 'sat:download-gastos';
-    protected $description = 'Verifica el estado de las solicitudes al SAT, descarga los ZIPs y guarda los gastos en la BD';
+    protected $description = 'Verifica el estado de las solicitudes al SAT, descarga los Metadatos y guarda los gastos en la BD';
 
     public function handle()
     {
-        // 1. Buscamos todos los tickets que sigan pendientes
-        $pendingRequests = SatRequest::where('status', 'pending')
+        // 1. Buscamos tickets que estén en 'pending' o 'failed' (para reintentar el de Flora)
+        $pendingRequests = SatRequest::whereIn('status', ['pending', 'failed'])
                                      ->where('type', 'gastos')
                                      ->with('company')
                                      ->get();
 
-        $this->info("Encontramos {$pendingRequests->count()} solicitudes pendientes en el SAT.");
+        $this->info("Encontramos {$pendingRequests->count()} solicitudes listas para revisar en el SAT.");
 
         foreach ($pendingRequests as $request) {
             $company = $request->company;
@@ -35,6 +34,7 @@ class DownloadSatGastos extends Command
 
                 if ($resultado['status'] === 'pending') {
                     $this->warn("El SAT aún no termina de armar el paquete. Intentaremos más tarde.");
+                    $request->update(['status' => 'pending']); // Lo regresamos a pendiente si el SAT sigue procesando
                     continue;
                 }
 
@@ -45,15 +45,15 @@ class DownloadSatGastos extends Command
                 }
 
                 if ($resultado['status'] === 'downloaded') {
-                    $this->info("¡ZIP Descargado! Procesando XMLs...");
+                    $this->info("¡Metadatos descargados con éxito! Procesando registros...");
                     
-                    // Procesamos cada ZIP descargado
-                    foreach ($resultado['files'] as $zipPath) {
-                        $this->procesarZip($zipPath, $company->id);
+                    // Procesamos cada archivo de texto plano descargado
+                    foreach ($resultado['files'] as $filePath) {
+                        $this->procesarMetadatosTxt($filePath, $company->id);
                     }
 
-                    // Marcamos el ticket como terminado
-                    $request->update(['status' => 'downloaded', 'mensaje_sat' => 'Gastos importados exitosamente.']);
+                    // Marcamos el ticket como terminado exitosamente
+                    $request->update(['status' => 'downloaded', 'mensaje_sat' => 'Metadatos de gastos importados exitosamente.']);
                     $this->info("✅ Ticket {$request->request_id} completado.");
                 }
 
@@ -65,79 +65,59 @@ class DownloadSatGastos extends Command
     }
 
     /**
-     * Extrae el ZIP y lee los XML
+     * Procesa el archivo de Metadatos del SAT (.txt) renglón por renglón
      */
-    private function procesarZip(string $zipPath, int $companyId)
+    private function procesarMetadatosTxt(string $filePath, int $companyId)
     {
-        $zip = new ZipArchive;
-        if ($zip->open($zipPath) === TRUE) {
-            
-            for ($i = 0; $i < $zip->numFiles; $i++) {
-                $xmlName = $zip->getNameIndex($i);
-                
-                // Solo nos interesan los archivos XML
-                if (pathinfo($xmlName, PATHINFO_EXTENSION) === 'xml') {
-                    $xmlContent = $zip->getFromIndex($i);
-                    $this->guardarGastoDesdeXml($xmlContent, $companyId);
-                }
+        if (!file_exists($filePath)) return;
+
+        $content = file_get_contents($filePath);
+        $lines = explode("\n", $content);
+
+        foreach ($lines as $line) {
+            // Los metadatos del SAT se separan con el caracter "|"
+            $data = explode("|", $line);
+
+            // Saltamos la cabecera del archivo o líneas vacías
+            if (count($data) < 11 || $data[0] === 'Uuid') continue;
+
+            try {
+                $uuid = strtoupper(trim($data[0]));
+                $rfcEmisor = trim($data[1]);
+                $nombreEmisor = trim($data[2]);
+                $rfcReceptor = trim($data[3]); // Utilizado para la Opción A (Centralizado)
+                $fechaEmision = trim($data[6]);
+                $total = (float) trim($data[10]);
+                $estadoDocumento = trim($data[11]) == '1' ? 'Vigente' : 'Cancelado';
+
+                // Filtrar para registrar únicamente facturas Vigentes
+                if ($estadoDocumento !== 'Vigente') continue;
+
+                // Guardamos en la base de datos indexando por el rfc_receptor (Opción A)
+                Gasto::updateOrCreate(
+                    [
+                        'company_id' => $companyId, // Mantenemos vinculación base
+                        'uuid' => $uuid,
+                    ],
+                    [
+                        'rfc_emisor' => $rfcEmisor,
+                        'nombre_emisor' => $nombreEmisor,
+                        'fecha_emision' => $fechaEmision,
+                        'subtotal' => $total, // Los metadatos solo dan el Total; lo usamos como base referencial
+                        'total' => $total,
+                        'metodo_pago' => 'N/A (Metadato)',
+                        'forma_pago' => 'N/A (Metadato)',
+                        'estado' => $estadoDocumento,
+                        'xml_path' => null // Al ser metadato no hay archivo XML físico individual por ahora
+                    ]
+                );
+
+            } catch (Throwable $e) {
+                continue; // Si un renglón viene dañado, lo saltamos y continuamos
             }
-            $zip->close();
-            
-            // Borramos el ZIP temporal después de extraer todo
-            unlink($zipPath);
         }
-    }
 
-    /**
-     * Extrae los datos vitales del XML y los guarda en la base de datos y en el disco
-     */
-    private function guardarGastoDesdeXml(string $xmlContent, int $companyId)
-    {
-        try {
-            // Quitamos prefijos raros de los nodos del SAT para facilitar la lectura
-            $cleanXml = str_replace(['cfdi:', 'tfd:'], '', $xmlContent);
-            $xml = simplexml_load_string($cleanXml);
-
-            if (!$xml) return;
-
-            $comprobante = $xml->attributes();
-            $emisor = $xml->Emisor->attributes();
-            $timbre = $xml->Complemento->TimbreFiscalDigital->attributes();
-
-            $uuid = (string) $timbre['UUID'];
-            $total = (float) $comprobante['Total'];
-            $subtotal = (float) $comprobante['SubTotal'];
-            $rfcEmisor = (string) $emisor['Rfc'];
-            $nombreEmisor = (string) $emisor['Nombre'];
-            
-            $tipoComprobante = (string) $comprobante['TipoDeComprobante'];
-            if (!in_array($tipoComprobante, ['I', 'E'])) return;
-
-            // ✅ GUARDAMOS EL ARCHIVO FÍSICO EN EL SERVIDOR
-            $xmlFileName = "gastos/{$companyId}/{$uuid}.xml";
-            Storage::disk('local')->put($xmlFileName, $xmlContent);
-
-            // Guardamos en la base de datos
-            Gasto::updateOrCreate(
-                [
-                    'company_id' => $companyId,
-                    'uuid' => $uuid,
-                ],
-                [
-                    'rfc_emisor' => $rfcEmisor,
-                    'nombre_emisor' => $nombreEmisor,
-                    'fecha_emision' => (string) $comprobante['Fecha'],
-                    'subtotal' => $subtotal,
-                    'total' => $tipoComprobante === 'E' ? -$total : $total,
-                    'metodo_pago' => (string) ($comprobante['MetodoPago'] ?? 'N/A'),
-                    'forma_pago' => (string) ($comprobante['FormaPago'] ?? 'N/A'),
-                    'estado' => 'Vigente',
-                    'xml_path' => $xmlFileName, // Vinculamos el archivo físico a la BD
-                ]
-            );
-
-        } catch (Throwable $e) {
-            return; // Si falla un XML, lo ignoramos y seguimos con el siguiente
-        }
+        // Borramos el archivo temporal de metadatos una vez leído
+        unlink($filePath);
     }
 }
