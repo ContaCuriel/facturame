@@ -60,31 +60,38 @@ class SatScraperService
     /**
      * PASO A: Solicitar al SAT que prepare el paquete
      */
+   /**
+     * PASO A: Solicitar al SAT que prepare el paquete
+     */
     public function solicitarDescargaDeGastos(DateTimeImmutable $fechaInicio, DateTimeImmutable $fechaFin, string $tipoArchivo = 'metadata')
     {
         $satService = $this->getSatService();
 
-        // 🧠 LA MAGIA: Si pedimos XML, le exigimos al SAT que solo mande Vigentes para evadir su bloqueo.
-        $requestType = $tipoArchivo === 'xml' ? RequestType::xml() : RequestType::metadata();
+        // Si es XML, pedimos solo Vigentes. Si es Metadata, pedimos todo.
+        $requestType = $tipoArchivo === 'xml' 
+            ? \PhpCfdi\SatWsDescargaMasiva\Shared\RequestType::xml() 
+            : \PhpCfdi\SatWsDescargaMasiva\Shared\RequestType::metadata();
+            
         $documentStatus = $tipoArchivo === 'xml' 
             ? \PhpCfdi\SatWsDescargaMasiva\Shared\DocumentStatus::active() 
             : \PhpCfdi\SatWsDescargaMasiva\Shared\DocumentStatus::undefined();
 
-        $query = \PhpCfdi\SatWsDescargaMasiva\Services\Query\QueryParameters::create(
-            DateTimePeriod::create(
-                \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaInicio->format('Y-m-d H:i:s')),
-                \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaFin->format('Y-m-d H:i:s'))
-            ),
-            DownloadType::received(),
-            $requestType,
-            \PhpCfdi\SatWsDescargaMasiva\Shared\ServiceType::cfdi(),
-            $documentStatus
+        // 1. Creamos el periodo de fechas
+        $period = \PhpCfdi\SatWsDescargaMasiva\Shared\DateTimePeriod::create(
+            \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaInicio->format('Y-m-d H:i:s')),
+            \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaFin->format('Y-m-d H:i:s'))
         );
+
+        // 2. Construimos la consulta usando métodos seguros (Fluent Setters) para que no haya "XML Mal Formado"
+        $query = \PhpCfdi\SatWsDescargaMasiva\Services\Query\QueryParameters::create($period)
+            ->withDownloadType(\PhpCfdi\SatWsDescargaMasiva\Shared\DownloadType::received())
+            ->withRequestType($requestType)
+            ->withDocumentStatus($documentStatus);
 
         $requestResult = $satService->query($query);
 
         if (!$requestResult->getStatus()->isAccepted()) {
-            throw new Exception('El SAT rechazó la solicitud: ' . $requestResult->getStatus()->getMessage());
+            throw new \Exception('El SAT rechazó la solicitud: ' . $requestResult->getStatus()->getMessage());
         }
 
         return $requestResult->getRequestId();
