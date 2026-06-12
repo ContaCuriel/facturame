@@ -58,25 +58,29 @@ class SatScraperService
     }
 
     /**
-     * PASO A: Solicitar al SAT que prepare el paquete de facturas recibidas (Gastos)
+     * PASO A: Solicitar al SAT que prepare el paquete
      */
-    public function solicitarDescargaDeGastos(DateTimeImmutable $fechaInicio, DateTimeImmutable $fechaFin)
+    public function solicitarDescargaDeGastos(DateTimeImmutable $fechaInicio, DateTimeImmutable $fechaFin, string $tipoArchivo = 'metadata')
     {
         $satService = $this->getSatService();
 
-        // Buscamos facturas RECIBIDAS (Gastos) solicitando METADATA para evitar bloqueos por facturas canceladas
+        // 🧠 LA MAGIA: Si pedimos XML, le exigimos al SAT que solo mande Vigentes para evadir su bloqueo.
+        $requestType = $tipoArchivo === 'xml' ? RequestType::xml() : RequestType::metadata();
+        $documentStatus = $tipoArchivo === 'xml' 
+            ? \PhpCfdi\SatWsDescargaMasiva\Shared\DocumentStatus::active() 
+            : \PhpCfdi\SatWsDescargaMasiva\Shared\DocumentStatus::undefined();
+
         $query = \PhpCfdi\SatWsDescargaMasiva\Services\Query\QueryParameters::create(
             DateTimePeriod::create(
                 \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaInicio->format('Y-m-d H:i:s')),
                 \PhpCfdi\SatWsDescargaMasiva\Shared\DateTime::create($fechaFin->format('Y-m-d H:i:s'))
             ),
             DownloadType::received(),
-            RequestType::metadata(), // <-- CAMBIAMOS DE xml() A metadata()
+            $requestType,
             \PhpCfdi\SatWsDescargaMasiva\Shared\ServiceType::cfdi(),
-            \PhpCfdi\SatWsDescargaMasiva\Shared\DocumentStatus::undefined()
+            $documentStatus
         );
 
-        // Enviamos la petición al SAT
         $requestResult = $satService->query($query);
 
         if (!$requestResult->getStatus()->isAccepted()) {
