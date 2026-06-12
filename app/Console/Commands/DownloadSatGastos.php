@@ -8,6 +8,7 @@ use App\Models\Gasto;
 use App\Services\SatScraperService;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
+use ZipArchive; // <-- IMPORTANTE: Agregamos el manejador de ZIPs
 
 class DownloadSatGastos extends Command
 {
@@ -16,7 +17,6 @@ class DownloadSatGastos extends Command
 
     public function handle()
     {
-        // 1. Buscamos tickets que estén en 'pending' o 'failed' (para reintentar el de Flora)
         $pendingRequests = SatRequest::whereIn('status', ['pending', 'failed'])
                                      ->where('type', 'gastos')
                                      ->with('company')
@@ -34,7 +34,7 @@ class DownloadSatGastos extends Command
 
                 if ($resultado['status'] === 'pending') {
                     $this->warn("El SAT aún no termina de armar el paquete. Intentaremos más tarde.");
-                    $request->update(['status' => 'pending']); // Lo regresamos a pendiente si el SAT sigue procesando
+                    $request->update(['status' => 'pending']);
                     continue;
                 }
 
@@ -45,14 +45,12 @@ class DownloadSatGastos extends Command
                 }
 
                 if ($resultado['status'] === 'downloaded') {
-                    $this->info("¡Metadatos descargados con éxito! Procesando registros...");
+                    $this->info("¡Metadatos descargados con éxito! Extrayendo ZIP y procesando registros...");
                     
-                    // Procesamos cada archivo de texto plano descargado
                     foreach ($resultado['files'] as $filePath) {
-                        $this->procesarMetadatosTxt($filePath, $company->id);
+                        $this->procesarMetadatosZip($filePath, $company->id);
                     }
 
-                    // Marcamos el ticket como terminado exitosamente
                     $request->update(['status' => 'downloaded', 'mensaje_sat' => 'Metadatos de gastos importados exitosamente.']);
                     $this->info("✅ Ticket {$request->request_id} completado.");
                 }
@@ -65,16 +63,72 @@ class DownloadSatGastos extends Command
     }
 
     /**
-     * Procesa el archivo de Metadatos del SAT (.txt) renglón por renglón
+     * Abre el ZIP del SAT, lee el archivo .txt de adentro y procesa los renglones
      */
-    private function procesarMetadatosTxt(string $filePath, int $companyId)
+    private function procesarMetadatosZip(string $zipPath, int $companyId)
     {
-        if (!file_exists($filePath)) return;
+        if (!file_exists($zipPath)) return;
 
-        $content = file_get_contents($filePath);
-        $lines = explode("\n", $content);
+        $zip = new ZipArchive;
+        if ($zip->open($zipPath) === TRUE) {
+            
+            // Recorremos los archivos dentro del ZIP (normalmente solo viene 1 archivo .txt)
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                
+                // Extraemos el texto crudo directamente desde el ZIP a la memoria
+                $content = $zip->getFromIndex($i);
+                if (empty($content)) continue;
 
-        // 🕵️‍♂️ TRUCO DETECTIVE: Imprimir los primeros 3 renglones del archivo y detenerse
-        dd(array_slice($lines, 0, 3));
+                $lines = explode("\n", $content);
+
+                foreach ($lines as $line) {
+                    // Cortamos con la tilde mágica del SAT
+                    $data = explode("~", $line);
+
+                    if (count($data) < 11 || strpos($data[0], 'Uuid') !== false) continue;
+
+                    try {
+                        $uuid = strtoupper(trim($data[0]));
+                        $rfcEmisor = trim($data[1]);
+                        $nombreEmisor = trim($data[2]);
+                        $rfcReceptor = trim($data[3]);
+                        $fechaEmision = trim($data[6]);
+                        $total = (float) trim($data[8]); 
+                        $tipoComprobante = trim($data[9]); 
+                        $estadoDocumento = trim($data[10]) == '1' ? 'Vigente' : 'Cancelado';
+
+                        if ($estadoDocumento !== 'Vigente') continue;
+                        if (!in_array($tipoComprobante, ['I', 'E'])) continue;
+
+                        $totalFinal = $tipoComprobante === 'E' ? -$total : $total;
+
+                        Gasto::updateOrCreate(
+                            [
+                                'company_id' => $companyId,
+                                'uuid' => $uuid,
+                            ],
+                            [
+                                'rfc_emisor' => $rfcEmisor,
+                                'nombre_emisor' => $nombreEmisor,
+                                'fecha_emision' => $fechaEmision,
+                                'subtotal' => $total, 
+                                'total' => $totalFinal,
+                                'metodo_pago' => 'N/A (Metadato)',
+                                'forma_pago' => 'N/A (Metadato)',
+                                'estado' => $estadoDocumento,
+                                'xml_path' => null 
+                            ]
+                        );
+
+                    } catch (Throwable $e) {
+                        continue; 
+                    }
+                }
+            }
+            $zip->close();
+        }
+
+        // Borramos el ZIP temporal del servidor
+        unlink($zipPath);
     }
 }
