@@ -45,35 +45,53 @@ class AuxiliarController
     {
         $owner = auth()->user();
 
+        // 1. Primero, solo validamos el correo y las empresas
         $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
-            'password' => ['required', 'confirmed', \Illuminate\Validation\Rules\Password::defaults()],
-            'companies' => ['required', 'array', 'min:1'], // <-- Ahora pedimos un arreglo (mínimo 1)
-            'companies.*' => ['exists:companies,id'], // <-- Verificamos que existan
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255'],
+            'companies' => ['required', 'array', 'min:1'],
+            'companies.*' => ['exists:companies,id'],
         ]);
 
-        // Verificamos que TODAS las empresas seleccionadas realmente pertenezcan al dueño
+        // Verificamos que las empresas seleccionadas realmente pertenezcan al dueño que está invitando
         $validCompanies = \App\Models\Company::whereIn('id', $request->companies)
                                  ->where('user_id', $owner->id)
                                  ->pluck('id');
 
-        // Si intentan hackear el form enviando IDs de empresas de otros dueños
         if ($validCompanies->count() !== count($request->companies)) {
             return back()->withErrors(['companies' => 'Una o más empresas seleccionadas no son válidas.'])->withInput();
         }
 
-        // 1. Creamos al usuario con el rol de auxiliar
-        $auxiliar = User::create([
+        // 2. Buscamos si el usuario ya está registrado en el ERP
+        $auxiliar = User::where('email', $request->email)->first();
+
+        if ($auxiliar) {
+            // EL USUARIO YA EXISTE (Puede ser dueño de otro despacho o auxiliar de alguien más)
+            // Usamos syncWithoutDetaching para agregarle estas nuevas empresas sin borrarle las que ya tenía.
+            $auxiliar->assignedCompanies()->syncWithoutDetaching($validCompanies);
+
+            return redirect()->route('auxiliares.index')
+                             ->with('success', 'El usuario ya tenía una cuenta en el sistema y ha sido vinculado exitosamente a tus empresas.');
+        } 
+        
+        // 3. EL USUARIO NO EXISTE EN EL SISTEMA
+        // Ahora sí validamos que haya escrito nombre y contraseña para crearlo desde cero
+        $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'password' => ['required', 'confirmed', \Illuminate\Validation\Rules\Password::defaults()],
+        ]);
+
+        // Creamos su cuenta
+        $nuevoAuxiliar = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => \Illuminate\Support\Facades\Hash::make($request->password),
             'role' => 'auxiliar',
         ]);
 
-        // 2. Lo conectamos a TODAS las empresas seleccionadas de un solo golpe
-        $auxiliar->assignedCompanies()->attach($validCompanies);
+        // Lo conectamos a las empresas
+        $nuevoAuxiliar->assignedCompanies()->attach($validCompanies);
 
-        return redirect()->route('auxiliares.index')->with('success', 'Auxiliar creado exitosamente y asignado a las empresas seleccionadas.');
+        return redirect()->route('auxiliares.index')
+                         ->with('success', 'Auxiliar creado exitosamente y asignado a las empresas.');
     }
 }
