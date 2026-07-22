@@ -11,6 +11,7 @@ use App\Http\Controllers\StudentController;
 use Illuminate\Support\Facades\Artisan;
 use App\Http\Controllers\GastoController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AuxiliarController;
 
 Route::get('/', function () {
     return view('auth.login');
@@ -59,6 +60,10 @@ Route::middleware('auth')->group(function () {
     Route::resource('invoices', InvoiceController::class);
     Route::resource('students', StudentController::class);
     Route::resource('gastos', GastoController::class);
+    // Rutas para gestionar Cajeras/Auxiliares (Solo dueños pueden entrar aquí)
+    Route::middleware('role:owner')->group(function () {
+        Route::resource('auxiliares', AuxiliarController::class)->except(['show']);
+    });
 
     // Rutas de Configuración
     Route::get('/companies/{company}/csd', [CompanyController::class, 'showCsdForm'])->name('companies.csd.form');

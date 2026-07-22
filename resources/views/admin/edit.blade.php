@@ -1,14 +1,14 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Editar Licencia: ') }} <span class="text-indigo-600">{{ $user->name }}</span>
+        <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
+            {{ __('Editar Licencia: ') }} <span class="text-indigo-600 dark:text-indigo-400">{{ $user->name }}</span>
         </h2>
     </x-slot>
 
     <div class="py-12">
         <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6 text-gray-900">
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 text-gray-900 dark:text-gray-100">
                     
                     <form action="{{ route('admin.update', $user) }}" method="POST">
                         @csrf
@@ -24,8 +24,8 @@
                             <!-- Fecha de Vencimiento -->
                             <div>
                                 <x-input-label for="expires_at" :value="__('Fecha de Vencimiento')" />
-                                <x-text-input id="expires_at" name="expires_at" type="date" class="mt-1 block w-full" :value="old('expires_at', $user->expires_at ? \Carbon\Carbon::parse($user->expires_at)->format('Y-m-d') : '')" />
-                                <p class="text-xs text-gray-500 mt-1">Deja en blanco si es una licencia ilimitada.</p>
+                                <x-text-input id="expires_at" name="expires_at" type="date" class="mt-1 block w-full dark:text-gray-300" :value="old('expires_at', $user->expires_at ? \Carbon\Carbon::parse($user->expires_at)->format('Y-m-d') : '')" />
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Deja en blanco si es una licencia ilimitada.</p>
                             </div>
 
                             <!-- Límite Empresas -->
@@ -42,7 +42,7 @@
                         </div>
 
                         <div class="mt-8 flex items-center justify-end">
-                            <a href="{{ route('admin.panel') }}" class="text-gray-500 hover:text-gray-700 mr-4 font-medium">Cancelar</a>
+                            <a href="{{ route('admin.panel') }}" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mr-4 font-medium">Cancelar</a>
                             <x-primary-button>
                                 {{ __('Guardar Cambios') }}
                             </x-primary-button>
