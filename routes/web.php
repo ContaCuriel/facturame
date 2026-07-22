@@ -10,6 +10,7 @@ use App\Http\Controllers\SatCatalogController;
 use App\Http\Controllers\StudentController;
 use Illuminate\Support\Facades\Artisan;
 use App\Http\Controllers\GastoController;
+use App\Http\Controllers\AdminController;
 
 Route::get('/', function () {
     return view('auth.login');
@@ -33,11 +34,8 @@ Route::get('/dashboard', [CompanyController::class, 'index'])
 // =========================================================================
 Route::middleware(['auth', 'role:superadmin'])->prefix('admin')->group(function () {
     
-    // Esta es una ruta de prueba. Cuando entres a /admin/panel verás este mensaje.
-    // Tus clientes verán un error 403 (Acceso Denegado).
-    Route::get('/panel', function () {
-        return "<h1>¡Bienvenido, nivel Dios!</h1> <p>Aquí construiremos la tabla para gestionar las licencias de tus clientes (Empresas, Despachos, Colegios).</p>";
-    })->name('admin.panel');
+    // Esta es una ruta modo dios
+    Route::get('/panel', [AdminController::class, 'index'])->name('admin.panel');
 
 });
 
