@@ -11,10 +11,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // 1. Excepción CSRF para que Facturama pueda enviar notificaciones
         $middleware->validateCsrfTokens(except: [
-        'api/webhooks/facturama', // Facturama no tiene token CSRF de tu app
-    ]);
-        //
+            'api/webhooks/facturama', 
+        ]);
+        
+        // 2. AQUÍ REGISTRAMOS A NUESTRO CADENERO DE ROLES
+        $middleware->alias([
+            'role' => \App\Http\Middleware\CheckRole::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

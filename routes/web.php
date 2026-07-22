@@ -28,14 +28,29 @@ Route::get('/importar-catalogo-secreto', function () {
 Route::get('/dashboard', [CompanyController::class, 'index'])
     ->middleware(['auth', 'verified'])->name('dashboard');
 
+// =========================================================================
+// 👑 RUTAS EXCLUSIVAS DEL SUPERADMIN (FASE C) 👑
+// =========================================================================
+Route::middleware(['auth', 'role:superadmin'])->prefix('admin')->group(function () {
+    
+    // Esta es una ruta de prueba. Cuando entres a /admin/panel verás este mensaje.
+    // Tus clientes verán un error 403 (Acceso Denegado).
+    Route::get('/panel', function () {
+        return "<h1>¡Bienvenido, nivel Dios!</h1> <p>Aquí construiremos la tabla para gestionar las licencias de tus clientes (Empresas, Despachos, Colegios).</p>";
+    })->name('admin.panel');
+
+});
+
+// =========================================================================
+// 🏢 RUTAS GENERALES DEL ERP (DUEÑOS Y AUXILIARES)
+// =========================================================================
 Route::middleware('auth')->group(function () {
     // Rutas de Perfil
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // ✅ --- LÍNEA CLAVE CORREGIDA --- ✅
-    // Nos aseguramos de que el recurso completo esté disponible, incluyendo el método 'show' (GET).
+    // Nos aseguramos de que el recurso completo esté disponible
     Route::resource('companies', CompanyController::class);
     Route::resource('clients', ClientController::class);
     Route::resource('products', ProductController::class);
@@ -45,7 +60,6 @@ Route::middleware('auth')->group(function () {
 
     // Rutas de Configuración
     Route::get('/companies/{company}/csd', [CompanyController::class, 'showCsdForm'])->name('companies.csd.form');
-    // ✅ AQUÍ ESTÁ EL CAMBIO: Le pusimos el nombre que pide la vista
     Route::post('/companies/{company}/csd', [CompanyController::class, 'storeCsd'])->name('companies.storeCsd');
     Route::post('/companies/{company}/fiel', [CompanyController::class, 'storeFiel'])->name('companies.fiel.store');
     Route::get('/companies/{company}/logo', [CompanyController::class, 'showLogoForm'])->name('companies.logo.form');
@@ -63,6 +77,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/invoices/{invoice}/xml', [InvoiceController::class, 'downloadXml'])->name('invoices.xml');
     Route::delete('/invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
     Route::post('/invoices/{invoice}/send-email', [InvoiceController::class, 'sendByEmail'])->name('invoices.email');
+    
+    // Rutas de Pagos
     Route::get('/invoices/{invoice}/payments', [\App\Http\Controllers\PaymentController::class, 'index'])->name('payments.index');
     Route::post('/invoices/{invoice}/payments', [\App\Http\Controllers\PaymentController::class, 'store'])->name('payments.store');
     Route::get('/payments/{payment}/pdf', [\App\Http\Controllers\PaymentController::class, 'downloadPdf'])->name('payments.pdf');
