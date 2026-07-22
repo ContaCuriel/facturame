@@ -14,10 +14,11 @@ class AuxiliarController
     {
         $owner = auth()->user();
         
-        // Obtenemos todos los auxiliares que tienen acceso a las empresas de este dueño
+        // Obtenemos a TODOS los usuarios invitados a las empresas de este dueño
+        // (Sin importar si son dueños de sus propios despachos)
         $auxiliares = User::whereHas('assignedCompanies', function ($query) use ($owner) {
             $query->whereIn('companies.id', $owner->companies->pluck('id'));
-        })->where('role', 'auxiliar')->get();
+        })->where('id', '!=', $owner->id)->get();
 
         return view('auxiliares.index', compact('auxiliares', 'owner'));
     }
@@ -26,10 +27,10 @@ class AuxiliarController
     {
         $owner = auth()->user();
         
-        // Contamos cuántos auxiliares ya tiene registrados
+        // Contamos cuántos invitados ya tiene registrados
         $currentAuxiliares = User::whereHas('assignedCompanies', function ($query) use ($owner) {
             $query->whereIn('companies.id', $owner->companies->pluck('id'));
-        })->where('role', 'auxiliar')->count();
+        })->where('id', '!=', $owner->id)->count();
 
         // Validamos el límite de su licencia
         if ($currentAuxiliares >= $owner->max_auxiliares) {
