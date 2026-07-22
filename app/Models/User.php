@@ -22,6 +22,11 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',            // <-- NUEVO: Rol del usuario
+        'plan',            // <-- NUEVO: Nombre del paquete
+        'max_empresas',    // <-- NUEVO: Límite de empresas
+        'max_auxiliares',  // <-- NUEVO: Límite de auxiliares
+        'expires_at',      // <-- NUEVO: Fecha de vencimiento
     ];
 
     /**
@@ -48,10 +53,19 @@ class User extends Authenticatable
     }
 
     /**
-     * Define la relación donde un Usuario puede tener muchas Empresas.
+     * Define la relación donde un Usuario puede ser dueño de muchas Empresas.
      */
     public function companies(): HasMany
     {
         return $this->hasMany(Company::class);
+    }
+
+    /**
+     * Define la relación donde un Usuario (auxiliar o dueño) tiene acceso a muchas empresas
+     * a través de la tabla pivote company_user.
+     */
+    public function assignedCompanies()
+    {
+        return $this->belongsToMany(Company::class);
     }
 }

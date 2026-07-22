@@ -7,7 +7,7 @@ use App\Models\Gasto;
 use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
-class GastoController extends Controller
+class GastoController
 {
     use AuthorizesRequests;
 

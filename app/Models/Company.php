@@ -62,4 +62,14 @@ class Company extends Model
     {
         return $this->hasMany(Student::class);
     }
+
+    /**
+     * <-- NUEVO: Relación de tabla pivote -->
+     * Define la relación donde una empresa puede ser vista/administrada
+     * por múltiples usuarios (dueño y auxiliares).
+     */
+    public function assignedUsers()
+    {
+        return $this->belongsToMany(User::class);
+    }
 }
