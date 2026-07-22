@@ -38,7 +38,7 @@
                                             {{ $cliente->expires_at ? \Carbon\Carbon::parse($cliente->expires_at)->format('d/m/Y') : 'Ilimitado' }}
                                         </td>
                                         <td class="py-4 px-4 text-sm text-center font-medium">
-                                            <a href="#" class="text-indigo-600 hover:text-indigo-900">Editar Licencia</a>
+                                            <a href="{{ route('admin.edit', $cliente) }}" class="text-indigo-600 hover:text-indigo-900">Editar Licencia</a>
                                         </td>
                                     </tr>
                                 @empty

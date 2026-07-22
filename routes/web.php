@@ -37,6 +37,10 @@ Route::middleware(['auth', 'role:superadmin'])->prefix('admin')->group(function 
     // Esta es una ruta modo dios
     Route::get('/panel', [AdminController::class, 'index'])->name('admin.panel');
 
+    // Las dos rutas nuevas para editar licencias:
+    Route::get('/clientes/{user}/editar', [AdminController::class, 'edit'])->name('admin.edit');
+    Route::put('/clientes/{user}', [AdminController::class, 'update'])->name('admin.update');
+
 });
 
 // =========================================================================

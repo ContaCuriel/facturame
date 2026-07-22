@@ -15,6 +15,13 @@
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         {{ __('Dashboard') }}
                     </x-nav-link>
+                    
+                    <!-- Botón Maestro Desktop (Ahora sí está dentro del contenedor correcto) -->
+                    @if(auth()->user()->role === 'superadmin')
+                        <x-nav-link :href="route('admin.panel')" :active="request()->routeIs('admin.panel')">
+                            👑 {{ __('Panel Maestro') }}
+                        </x-nav-link>
+                    @endif
                 </div>
             </div>
 
@@ -70,6 +77,13 @@
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
+            
+            <!-- Botón Maestro Móvil -->
+            @if(auth()->user()->role === 'superadmin')
+                <x-responsive-nav-link :href="route('admin.panel')" :active="request()->routeIs('admin.panel')">
+                    👑 {{ __('Panel Maestro') }}
+                </x-responsive-nav-link>
+            @endif
         </div>
 
         <!-- Responsive Settings Options -->
