@@ -22,10 +22,10 @@
                             👑 {{ __('Panel Maestro') }}
                         </x-nav-link>
                     @endif
-                    <!-- Botón para Dueños de Negocios (Cajeras/Auxiliares) -->
-@if(auth()->user()->role === 'owner' || auth()->user()->role === 'user')
+<!-- Botón para Dueños y SuperAdmin -->
+@if(auth()->user()->role !== 'auxiliar')
     <x-nav-link :href="route('auxiliares.index')" :active="request()->routeIs('auxiliares.*')">
-        👥 {{ __('Mis Cajeras') }}
+        👥 {{ __('Mis Auxiliares') }}
     </x-nav-link>
 @endif
                 </div>
@@ -90,10 +90,10 @@
                     👑 {{ __('Panel Maestro') }}
                 </x-responsive-nav-link>
             @endif
-            <!-- Botón para Dueños de Negocios (Cajeras/Auxiliares) -->
-@if(auth()->user()->role === 'owner' || auth()->user()->role === 'user')
+            <!-- Botón para Dueños y SuperAdmin -->
+@if(auth()->user()->role !== 'auxiliar')
     <x-nav-link :href="route('auxiliares.index')" :active="request()->routeIs('auxiliares.*')">
-        👥 {{ __('Mis Cajeras') }}
+        👥 {{ __('Mis Auxiliares') }}
     </x-nav-link>
 @endif
         </div>
