@@ -48,24 +48,32 @@ class AuxiliarController
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
-            'company_id' => ['required', 'exists:companies,id'],
+            'password' => ['required', 'confirmed', \Illuminate\Validation\Rules\Password::defaults()],
+            'companies' => ['required', 'array', 'min:1'], // <-- Ahora pedimos un arreglo (mínimo 1)
+            'companies.*' => ['exists:companies,id'], // <-- Verificamos que existan
         ]);
 
-        // Verificamos que la empresa seleccionada realmente pertenezca al dueño
-        $company = Company::where('id', $request->company_id)->where('user_id', $owner->id)->firstOrFail();
+        // Verificamos que TODAS las empresas seleccionadas realmente pertenezcan al dueño
+        $validCompanies = \App\Models\Company::whereIn('id', $request->companies)
+                                 ->where('user_id', $owner->id)
+                                 ->pluck('id');
+
+        // Si intentan hackear el form enviando IDs de empresas de otros dueños
+        if ($validCompanies->count() !== count($request->companies)) {
+            return back()->withErrors(['companies' => 'Una o más empresas seleccionadas no son válidas.'])->withInput();
+        }
 
         // 1. Creamos al usuario con el rol de auxiliar
         $auxiliar = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'password' => \Illuminate\Support\Facades\Hash::make($request->password),
             'role' => 'auxiliar',
         ]);
 
-        // 2. Lo conectamos a la empresa a través de la tabla pivote
-        $auxiliar->assignedCompanies()->attach($company->id);
+        // 2. Lo conectamos a TODAS las empresas seleccionadas de un solo golpe
+        $auxiliar->assignedCompanies()->attach($validCompanies);
 
-        return redirect()->route('auxiliares.index')->with('success', 'Auxiliar creado exitosamente y asignado a la empresa.');
+        return redirect()->route('auxiliares.index')->with('success', 'Auxiliar creado exitosamente y asignado a las empresas seleccionadas.');
     }
 }

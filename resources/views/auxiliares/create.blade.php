@@ -43,19 +43,28 @@
                                 <x-input-error class="mt-2" :messages="$errors->get('password_confirmation')" />
                             </div>
 
-                            <!-- Empresa Asignada -->
+                            <!-- Empresas Asignadas (Multi-select con casillas) -->
                             <div class="md:col-span-2">
-                                <x-input-label for="company_id" :value="__('Asignar a Empresa/Sucursal')" />
-                                <select id="company_id" name="company_id" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm" required>
-                                    <option value="">-- Selecciona una empresa --</option>
-                                    @foreach($empresas as $empresa)
-                                        <option value="{{ $empresa->id }}" {{ old('company_id') == $empresa->id ? 'selected' : '' }}>
-                                            {{ $empresa->commercial_name ?? $empresa->name }} (RFC: {{ $empresa->rfc }})
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <x-input-error class="mt-2" :messages="$errors->get('company_id')" />
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">El auxiliar solo podrá ver y operar la información de la empresa seleccionada.</p>
+                                <x-input-label :value="__('Asignar a Empresa(s) / Sucursal(es)')" />
+                                
+                                <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4 border border-gray-300 dark:border-gray-700 rounded-md p-4 bg-gray-50 dark:bg-gray-900 shadow-sm">
+                                    @forelse($empresas as $empresa)
+                                        <label class="inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" name="companies[]" value="{{ $empresa->id }}" 
+                                                class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 dark:bg-gray-900 dark:border-gray-700"
+                                                {{ (is_array(old('companies')) && in_array($empresa->id, old('companies'))) ? 'checked' : '' }}>
+                                            <span class="ml-3 text-sm text-gray-700 dark:text-gray-300">
+                                                {{ $empresa->commercial_name ?? $empresa->name }} 
+                                                <span class="text-xs text-gray-500 block">(RFC: {{ $empresa->rfc }})</span>
+                                            </span>
+                                        </label>
+                                    @empty
+                                        <p class="text-sm text-gray-500 dark:text-gray-400">Aún no has registrado empresas.</p>
+                                    @endforelse
+                                </div>
+                                
+                                <x-input-error class="mt-2" :messages="$errors->get('companies')" />
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">El auxiliar podrá ver y operar la información de todas las empresas que selecciones.</p>
                             </div>
                         </div>
 
