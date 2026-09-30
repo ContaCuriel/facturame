@@ -42,11 +42,17 @@ class InvoiceController extends Controller
 
     // Si viene la instrucción de copiar desde una factura previa
     if ($request->has('copy_from')) {
-        $sourceInvoice = \App\Models\Invoice::with(['client', 'items'])
+        $sourceInvoice = \App\Models\Invoice::with('client')
             ->where('company_id', $company->id)
             ->find($request->query('copy_from'));
 
         if ($sourceInvoice) {
+            // Decodificamos el campo JSON de items si viene como string
+            $rawItems = $sourceInvoice->items;
+            if (is_string($rawItems)) {
+                $rawItems = json_decode($rawItems, true);
+            }
+
             $clonedData = [
                 'client' => $sourceInvoice->client ? [
                     'id' => $sourceInvoice->client->id,
@@ -59,21 +65,23 @@ class InvoiceController extends Controller
                 'cfdiUse' => $sourceInvoice->cfdi_use ?? '',
                 'paymentForm' => $sourceInvoice->payment_form ?? '',
                 'paymentMethod' => $sourceInvoice->payment_method ?? '',
-                'items' => $sourceInvoice->items->map(function ($item) {
+                'items' => collect($rawItems ?? [])->map(function ($item) {
+                    $item = is_array($item) ? (object) $item : $item;
+                    
                     return [
-                        'product_id' => $item->product_id,
-                        'quantity' => (float) $item->quantity,
-                        'description' => $item->description,
-                        'price' => (float) $item->price,
-                        'total' => (float) ($item->quantity * $item->price),
-                        'isTaxable' => $item->is_taxable ?? true,
+                        'product_id' => $item->product_id ?? null,
+                        'quantity' => (float) ($item->quantity ?? 1),
+                        'description' => $item->description ?? '',
+                        'price' => (float) ($item->price ?? 0),
+                        'total' => (float) (($item->quantity ?? 1) * ($item->price ?? 0)),
+                        'isTaxable' => $item->isTaxable ?? ($item->is_taxable ?? true),
                         'taxes' => $item->taxes ?? [['type' => 'Traslado', 'name' => 'IVA', 'factor' => 'Tasa', 'rate' => 0.16]],
                         'newTax' => ['type' => 'Traslado', 'name' => 'IVA', 'factor' => 'Tasa', 'rate' => 0.16],
-                        'sat_product_key' => $item->sat_product_key,
-                        'sat_unit_key' => $item->sat_unit_key,
+                        'sat_product_key' => $item->sat_product_key ?? '',
+                        'sat_unit_key' => $item->sat_unit_key ?? '',
                         'student' => $item->student ?? null,
                     ];
-                })->toArray(),
+                })->values()->toArray(),
             ];
         }
     }
