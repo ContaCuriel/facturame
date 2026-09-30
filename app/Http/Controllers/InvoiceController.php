@@ -33,18 +33,59 @@ class InvoiceController extends Controller
     }
 
     public function create(Request $request)
-    {
-        $request->validate(['company_id' => 'required|exists:companies,id']);
-        $company = Company::findOrFail($request->query('company_id'));
-        $this->authorize('view', $company);
+{
+    $request->validate(['company_id' => 'required|exists:companies,id']);
+    $company = Company::findOrFail($request->query('company_id'));
+    $this->authorize('view', $company);
 
-        return view('invoices.create', [
-            'company' => $company,
-            'paymentForms' => config('sat.payment_forms'),
-            'paymentMethods' => config('sat.payment_methods'),
-            'cfdiUses' => config('sat.cfdi_uses'),
-        ]);
+    $clonedData = null;
+
+    // Si viene la instrucción de copiar desde una factura previa
+    if ($request->has('copy_from')) {
+        $sourceInvoice = \App\Models\Invoice::with(['client', 'items'])
+            ->where('company_id', $company->id)
+            ->find($request->query('copy_from'));
+
+        if ($sourceInvoice) {
+            $clonedData = [
+                'client' => $sourceInvoice->client ? [
+                    'id' => $sourceInvoice->client->id,
+                    'name' => $sourceInvoice->client->name,
+                    'rfc' => $sourceInvoice->client->rfc,
+                    'fiscal_regime' => $sourceInvoice->client->fiscal_regime,
+                    'email' => $sourceInvoice->client->email,
+                ] : {},
+                'invoiceEmail' => $sourceInvoice->invoice_email ?? ($sourceInvoice->client->email ?? ''),
+                'cfdiUse' => $sourceInvoice->cfdi_use ?? '',
+                'paymentForm' => $sourceInvoice->payment_form ?? '',
+                'paymentMethod' => $sourceInvoice->payment_method ?? '',
+                'items' => $sourceInvoice->items->map(function ($item) {
+                    return [
+                        'product_id' => $item->product_id,
+                        'quantity' => (float) $item->quantity,
+                        'description' => $item->description,
+                        'price' => (float) $item->price,
+                        'total' => (float) ($item->quantity * $item->price),
+                        'isTaxable' => $item->is_taxable ?? true,
+                        'taxes' => $item->taxes ?? [{ 'type' => 'Traslado', 'name' => 'IVA', 'factor' => 'Tasa', 'rate' => 0.16 }],
+                        'newTax' => ['type' => 'Traslado', 'name' => 'IVA', 'factor' => 'Tasa', 'rate' => 0.16],
+                        'sat_product_key' => $item->sat_product_key,
+                        'sat_unit_key' => $item->sat_unit_key,
+                        'student' => $item->student ?? null,
+                    ];
+                })->toArray(),
+            ];
+        }
     }
+
+    return view('invoices.create', [
+        'company' => $company,
+        'paymentForms' => config('sat.payment_forms'),
+        'paymentMethods' => config('sat.payment_methods'),
+        'cfdiUses' => config('sat.cfdi_uses'),
+        'clonedData' => $clonedData,
+    ]);
+}
 
     public function store(Request $request, FacturamaService $facturama)
     {

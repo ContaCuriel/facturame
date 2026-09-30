@@ -35,6 +35,11 @@
                 <a href="{{ route('invoices.xml', $invoice) }}" class="px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-900 dark:text-indigo-100 dark:border-indigo-600 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-800 text-sm font-bold transition">
                     💻 Descargar XML
                 </a>
+                <!-- Botón Copiar a Nueva Factura -->
+            <a href="{{ route('invoices.create', ['company_id' => $invoice->company_id, 'copy_from' => $invoice->id]) }}" 
+               class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-semibold text-xs uppercase tracking-widest rounded-md shadow-sm transition ease-in-out duration-150">
+                📋 Copiar a nueva
+            </a>
             @elseif($invoice->status === 'draft')
                 <a href="{{ route('invoices.edit', $invoice) }}" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-bold transition shadow-md">
                     ✏️ Continuar Edición

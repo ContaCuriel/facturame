@@ -6,8 +6,7 @@
     <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
         <div class="p-6 md:p-8 text-gray-900 dark:text-gray-100">
             
-            <div x-data="invoiceForm()">
-                {{-- Bloque para mostrar errores de sesión o validación --}}
+            <div x-data="invoiceForm({{ json_encode($clonedData) }})">                {{-- Bloque para mostrar errores de sesión o validación --}}
                 @if (session('error'))
                     <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md" role="alert">
                         <strong class="font-bold">¡Error!</strong>
@@ -240,109 +239,121 @@
     </div>
 
     <script>
-        function invoiceForm() {
-            return {
-                // Cliente
-                clientSearchQuery: '', clientSearchResults: [], showClientResults: false, selectedClient: {},
-                invoiceEmail: '',
-                // Productos
-                productSearchQuery: '', productSearchResults: [], showProductResults: false, items: [],
-                // Datos Fiscales
-                cfdiUse: '', paymentForm: '', paymentMethod: '',
-                // Modal
-                taxModalOpen: false, editingItemIndex: null,
+    function invoiceForm(initialData = null) {
+        return {
+            // Cliente (Si hay datos clonados, se precargan aquí)
+            clientSearchQuery: initialData?.client?.name || '',
+            clientSearchResults: [],
+            showClientResults: false,
+            selectedClient: initialData?.client || {},
+            invoiceEmail: initialData?.invoiceEmail || '',
 
-                companyId: {{ $company->id }},
+            // Productos (Se precargan los conceptos clonados)
+            productSearchQuery: '',
+            productSearchResults: [],
+            showProductResults: false,
+            items: initialData?.items || [],
 
-                searchClients() {
-                    if (this.clientSearchQuery.length < 2) { this.clientSearchResults = []; return; }
-                    fetch(`{{ route('api.clients.search') }}?company_id=${this.companyId}&query=${this.clientSearchQuery}`)
-                        .then(res => res.json()).then(data => this.clientSearchResults = data);
-                },
-                selectClient(client) {
-                    this.selectedClient = client;
-                    this.clientSearchQuery = client.name;
-                    this.showClientResults = false;
-                    this.invoiceEmail = client.email || '';
-                    this.cfdiUse = client.cfdi_use || '';
-                    this.paymentForm = client.payment_form || '';
-                    this.paymentMethod = client.payment_method || '';
-                },
-                searchProducts() {
-                    if (this.productSearchQuery.length < 2) { this.productSearchResults = []; return; }
-                    fetch(`{{ route('api.products.search') }}?company_id=${this.companyId}&query=${this.productSearchQuery}`)
-                        .then(res => res.json()).then(data => this.productSearchResults = data);
-                },
-                addProduct(product) {
-                    this.items.push({
-                        product_id: product.id,
-                        quantity: 1,
-                        description: product.description,
-                        price: parseFloat(product.price),
-                        total: parseFloat(product.price),
-                        isTaxable: product.taxes,
-                        taxes: product.taxes ? [{ type: 'Traslado', name: 'IVA', factor: 'Tasa', rate: 0.16 }] : [],
-                        newTax: { type: 'Traslado', name: 'IVA', factor: 'Tasa', rate: 0.16 },
-                        sat_product_key: product.sat_product_key,
-                        sat_unit_key: product.sat_unit_key,
-                        student: product.student || null 
-                    });
-                    this.productSearchQuery = '';
-                    this.showProductResults = false;
-                },
-                removeItem(index) {
-                    this.items.splice(index, 1);
-                },
-                updateItemTotal(index) {
-                    let item = this.items[index];
-                    item.total = item.quantity * item.price;
-                },
-                openTaxModal(index) {
-                    this.editingItemIndex = index;
-                    this.taxModalOpen = true;
-                },
-                get editingItem() {
-                    return this.editingItemIndex !== null ? this.items[this.editingItemIndex] : null;
-                },
-                toggleTax(index, isTaxable) {
-                    if (!isTaxable) {
-                        this.items[index].taxes = [];
-                    } else if (this.items[index].taxes.length === 0) {
-                        this.items[index].taxes.push({ type: 'Traslado', name: 'IVA', factor: 'Tasa', rate: 0.16 });
-                    }
-                },
-                addTax(index) {
-                    const item = this.items[index];
-                    if (item.newTax.rate !== null && item.newTax.rate >= 0) {
-                        item.taxes.push({ ...item.newTax });
-                    }
-                },
-                removeTax(itemIndex, taxIndex) {
-                    this.items[itemIndex].taxes.splice(taxIndex, 1);
-                },
-                get subtotal() {
-                    return this.items.reduce((acc, item) => acc + item.total, 0);
-                },
-                get totalTraslados() {
-                    return this.items.reduce((total, item) => {
-                        const itemTraslados = item.taxes
-                            .filter(t => t.type === 'Traslado')
-                            .reduce((acc, tax) => acc + (item.total * tax.rate), 0);
-                        return total + itemTraslados;
-                    }, 0);
-                },
-                get totalRetenciones() {
-                    return this.items.reduce((total, item) => {
-                        const itemRetenciones = item.taxes
-                            .filter(t => t.type === 'Retencion')
-                            .reduce((acc, tax) => acc + (item.total * tax.rate), 0);
-                        return total + itemRetenciones;
-                    }, 0);
-                },
-                get total() {
-                    return this.subtotal + this.totalTraslados - this.totalRetenciones;
+            // Datos Fiscales
+            cfdiUse: initialData?.cfdiUse || '',
+            paymentForm: initialData?.paymentForm || '',
+            paymentMethod: initialData?.paymentMethod || '',
+
+            // Modal
+            taxModalOpen: false,
+            editingItemIndex: null,
+
+            companyId: {{ $company->id }},
+
+            searchClients() {
+                if (this.clientSearchQuery.length < 2) { this.clientSearchResults = []; return; }
+                fetch(`{{ route('api.clients.search') }}?company_id=${this.companyId}&query=${this.clientSearchQuery}`)
+                    .then(res => res.json()).then(data => this.clientSearchResults = data);
+            },
+            selectClient(client) {
+                this.selectedClient = client;
+                this.clientSearchQuery = client.name;
+                this.showClientResults = false;
+                this.invoiceEmail = client.email || '';
+                this.cfdiUse = client.cfdi_use || '';
+                this.paymentForm = client.payment_form || '';
+                this.paymentMethod = client.payment_method || '';
+            },
+            searchProducts() {
+                if (this.productSearchQuery.length < 2) { this.productSearchResults = []; return; }
+                fetch(`{{ route('api.products.search') }}?company_id=${this.companyId}&query=${this.productSearchQuery}`)
+                    .then(res => res.json()).then(data => this.productSearchResults = data);
+            },
+            addProduct(product) {
+                this.items.push({
+                    product_id: product.id,
+                    quantity: 1,
+                    description: product.description,
+                    price: parseFloat(product.price),
+                    total: parseFloat(product.price),
+                    isTaxable: product.taxes,
+                    taxes: product.taxes ? [{ type: 'Traslado', name: 'IVA', factor: 'Tasa', rate: 0.16 }] : [],
+                    newTax: { type: 'Traslado', name: 'IVA', factor: 'Tasa', rate: 0.16 },
+                    sat_product_key: product.sat_product_key,
+                    sat_unit_key: product.sat_unit_key,
+                    student: product.student || null 
+                });
+                this.productSearchQuery = '';
+                this.showProductResults = false;
+            },
+            removeItem(index) {
+                this.items.splice(index, 1);
+            },
+            updateItemTotal(index) {
+                let item = this.items[index];
+                item.total = item.quantity * item.price;
+            },
+            openTaxModal(index) {
+                this.editingItemIndex = index;
+                this.taxModalOpen = true;
+            },
+            get editingItem() {
+                return this.editingItemIndex !== null ? this.items[this.editingItemIndex] : null;
+            },
+            toggleTax(index, isTaxable) {
+                if (!isTaxable) {
+                    this.items[index].taxes = [];
+                } else if (this.items[index].taxes.length === 0) {
+                    this.items[index].taxes.push({ type: 'Traslado', name: 'IVA', factor: 'Tasa', rate: 0.16 });
                 }
+            },
+            addTax(index) {
+                const item = this.items[index];
+                if (item.newTax.rate !== null && item.newTax.rate >= 0) {
+                    item.taxes.push({ ...item.newTax });
+                }
+            },
+            removeTax(itemIndex, taxIndex) {
+                this.items[itemIndex].taxes.splice(taxIndex, 1);
+            },
+            get subtotal() {
+                return this.items.reduce((acc, item) => acc + item.total, 0);
+            },
+            get totalTraslados() {
+                return this.items.reduce((total, item) => {
+                    const itemTraslados = (item.taxes || [])
+                        .filter(t => t.type === 'Traslado')
+                        .reduce((acc, tax) => acc + (item.total * tax.rate), 0);
+                    return total + itemTraslados;
+                }, 0);
+            },
+            get totalRetenciones() {
+                return this.items.reduce((total, item) => {
+                    const itemRetenciones = (item.taxes || [])
+                        .filter(t => t.type === 'Retencion')
+                        .reduce((acc, tax) => acc + (item.total * tax.rate), 0);
+                    return total + itemRetenciones;
+                }, 0);
+            },
+            get total() {
+                return this.subtotal + this.totalTraslados - this.totalRetenciones;
             }
         }
-    </script>
+    }
+</script>
 </x-company-panel-layout>
