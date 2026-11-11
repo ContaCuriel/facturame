@@ -787,6 +787,7 @@ class InvoiceController extends Controller
                     'payment_method' => $metodoPago,
                     'cfdi_use' => (string) $receptor['UsoCFDI'] ?? 'G03',
                     'subtotal' => (float) $comprobante['SubTotal'],
+                    'taxes' => (float) $comprobante['Total'] - (float) $comprobante['SubTotal'], // <-- SOLUCIÓN AQUÍ
                     'total' => (float) $comprobante['Total'],
                     'status' => 'issued',
                     'date' => date('Y-m-d', strtotime((string) $comprobante['Fecha'])),
