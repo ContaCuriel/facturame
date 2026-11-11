@@ -161,4 +161,12 @@ class FacturamaService
             ->withBasicAuth($this->apiUser, $this->apiPassword)
             ->get("{$this->apiUrl}/acuse/{$format}/{$type}/{$id}");
     }
+
+    public function getInvoicesList($rfcEmisor, $type = 'issued', $status = 'active')
+    {
+        // Trae las facturas emitidas (issued) o recibidas (payroll, etc)
+        $response = $this->client->get("/api/Cfdi?type={$type}&status={$status}&rfc={$rfcEmisor}");
+        
+        return $response->json();
+    }
 }

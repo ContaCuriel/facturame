@@ -13,15 +13,34 @@
             <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-200">
                 Facturas Emitidas
             </h1>
-            <a href="{{ route('invoices.create', ['company_id' => $company->id]) }}" class="inline-flex items-center px-4 py-2 bg-gray-800 dark:bg-gray-200 border border-transparent rounded-md font-semibold text-xs text-white dark:text-gray-800 uppercase tracking-widest hover:bg-gray-700 dark:hover:bg-white">
-                Nueva Factura
-            </a>
+            
+            {{-- CONTENEDOR DE BOTONES SUPERIORES --}}
+            <div class="flex items-center space-x-3">
+                <!-- Botón de Sincronizar -->
+                <form action="{{ route('invoices.sync', ['company_id' => $company->id]) }}" method="POST" class="inline">
+                    @csrf
+                    <button type="submit" class="inline-flex items-center px-4 py-2 bg-green-600 dark:bg-green-500 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 dark:hover:bg-green-600 transition ease-in-out duration-150 shadow-sm" onclick="return confirm('¿Deseas buscar e importar facturas previas emitidas desde Facturama?')">
+                        🔄 Sincronizar Anteriores
+                    </button>
+                </form>
+
+                <!-- Botón de Nueva Factura -->
+                <a href="{{ route('invoices.create', ['company_id' => $company->id]) }}" class="inline-flex items-center px-4 py-2 bg-gray-800 dark:bg-gray-200 border border-transparent rounded-md font-semibold text-xs text-white dark:text-gray-800 uppercase tracking-widest hover:bg-gray-700 dark:hover:bg-white shadow-sm transition ease-in-out duration-150">
+                    Nueva Factura
+                </a>
+            </div>
         </div>
 
         @if (session('success'))
             <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-md relative dark:bg-green-900 dark:border-green-600 dark:text-green-300" role="alert">
                 <strong class="font-bold">¡Éxito!</strong>
                 <span class="block sm:inline">{{ session('success') }}</span>
+            </div>
+        @endif
+        @if (session('info'))
+            <div class="mb-4 bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded-md relative dark:bg-blue-900 dark:border-blue-600 dark:text-blue-300" role="alert">
+                <strong class="font-bold">Información:</strong>
+                <span class="block sm:inline">{{ session('info') }}</span>
             </div>
         @endif
         @if (session('error'))

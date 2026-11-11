@@ -724,4 +724,66 @@ class InvoiceController extends Controller
 
         return back()->with('success', '¡Correo enviado exitosamente a ' . $validated['email'] . '!');
     }
+
+    public function syncFromFacturama(Request $request, \App\Services\FacturamaService $facturama)
+    {
+        $request->validate(['company_id' => 'required|exists:companies,id']);
+        $company = \App\Models\Company::findOrFail($request->query('company_id'));
+        $this->authorize('view', $company);
+
+        try {
+            // Traemos el historial de facturas activas desde Facturama
+            $facturas = $facturama->getInvoicesList($company->rfc);
+
+            if (empty($facturas)) {
+                return back()->with('info', 'No se encontraron facturas en el SAT/Facturama para este RFC.');
+            }
+
+            $importadas = 0;
+
+            foreach ($facturas as $cfdi) {
+                // Solo nos interesan las facturas normales (I - Ingreso)
+                if (isset($cfdi['CfdiType']) && $cfdi['CfdiType'] === 'I') {
+                    
+                    // Buscamos si el cliente ya existe en el ERP, si no, lo creamos rápido
+                    $client = \App\Models\Client::firstOrCreate(
+                        ['rfc' => $cfdi['Receiver']['Rfc'], 'company_id' => $company->id],
+                        [
+                            'name' => $cfdi['Receiver']['Name'],
+                            'fiscal_regime' => '616', // Valor por defecto seguro
+                            'zip_code' => '00000',    // Valor por defecto seguro
+                        ]
+                    );
+
+                    // Guardamos la factura en la base de datos local
+                    \App\Models\Invoice::updateOrCreate(
+                        ['uuid' => $cfdi['Uuid']], // Usamos el UUID para no duplicar
+                        [
+                            'company_id' => $company->id,
+                            'client_id' => $client->id,
+                            'facturama_id' => $cfdi['Id'],
+                            'series' => $cfdi['Serie'] ?? '',
+                            'folio' => $cfdi['Folio'] ?? '',
+                            'payment_form' => $cfdi['PaymentForm'] ?? '99',
+                            'payment_method' => $cfdi['PaymentMethod'] ?? 'PPD',
+                            'cfdi_use' => $cfdi['Receiver']['CfdiUse'] ?? 'G03',
+                            'subtotal' => $cfdi['Subtotal'] ?? 0,
+                            'total' => $cfdi['Total'] ?? 0,
+                            'status' => 'issued',
+                            'date' => date('Y-m-d', strtotime($cfdi['Date'])),
+                            // Guardamos un JSON vacío o genérico para items antiguos
+                            'items' => json_encode([['description' => 'Conceptos importados del SAT', 'quantity' => 1, 'price' => $cfdi['Subtotal']]]) 
+                        ]
+                    );
+                    $importadas++;
+                }
+            }
+
+            return back()->with('success', "¡Sincronización exitosa! Se actualizaron/importaron {$importadas} facturas desde el SAT.");
+
+        } catch (\Exception $e) {
+            return back()->with('error', 'Error al sincronizar con Facturama: ' . $e->getMessage());
+        }
+    }
+
 }
