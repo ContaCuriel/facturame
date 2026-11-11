@@ -762,6 +762,12 @@ class InvoiceController extends Controller
             }
 
             $uuid = (string) $timbre['UUID'];
+            
+            // Validación para evitar duplicados
+            if (\App\Models\Invoice::where('uuid', $uuid)->exists()) {
+                return back()->with('info', "Esta factura ya había sido importada previamente.");
+            }
+
             $metodoPago = (string) $comprobante['MetodoPago'];
             
             // Creamos o encontramos al cliente basándonos en el XML
@@ -774,8 +780,10 @@ class InvoiceController extends Controller
                 ]
             );
 
+            $xmlDate = date('Y-m-d H:i:s', strtotime((string) $comprobante['Fecha']));
+
             // Guardamos la Factura en la BD
-            \App\Models\Invoice::updateOrCreate(
+            $invoice = \App\Models\Invoice::updateOrCreate(
                 ['uuid' => $uuid],
                 [
                     'company_id' => $company->id,
@@ -787,13 +795,17 @@ class InvoiceController extends Controller
                     'payment_method' => $metodoPago,
                     'cfdi_use' => (string) $receptor['UsoCFDI'] ?? 'G03',
                     'subtotal' => (float) $comprobante['SubTotal'],
-                    'taxes' => (float) $comprobante['Total'] - (float) $comprobante['SubTotal'], // <-- SOLUCIÓN AQUÍ
+                    'taxes' => (float) $comprobante['Total'] - (float) $comprobante['SubTotal'],
                     'total' => (float) $comprobante['Total'],
                     'status' => 'issued',
                     'date' => date('Y-m-d', strtotime((string) $comprobante['Fecha'])),
                     'items' => json_encode([['description' => 'Factura importada vía XML', 'quantity' => 1, 'price' => (float) $comprobante['SubTotal']]])
                 ]
             );
+
+            // 🎯 FORZAR LA FECHA DEL XML Y EVITAR QUE LARAVEL LA SOBREESCRIBA
+            $invoice->created_at = $xmlDate;
+            $invoice->save(['timestamps' => false]);
 
             $msg = $metodoPago === 'PPD' 
                 ? "¡XML Importado! Al ser una factura PPD a crédito, ya puedes ir a registrarle sus pagos."

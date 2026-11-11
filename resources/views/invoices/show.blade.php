@@ -29,17 +29,20 @@
             </a>
             
             @if($invoice->status === 'issued')
-                <a href="{{ route('invoices.pdf', $invoice) }}" class="px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-900 dark:text-indigo-100 dark:border-indigo-600 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-800 text-sm font-bold transition">
-                    📄 Descargar PDF
-                </a>
-                <a href="{{ route('invoices.xml', $invoice) }}" class="px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-900 dark:text-indigo-100 dark:border-indigo-600 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-800 text-sm font-bold transition">
-                    💻 Descargar XML
-                </a>
+                {{-- Si NO es importada, mostramos PDF/XML de Facturama --}}
+                @if($invoice->facturama_id !== 'XML_IMPORTADO')
+                    <a href="{{ route('invoices.pdf', $invoice) }}" class="px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-900 dark:text-indigo-100 dark:border-indigo-600 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-800 text-sm font-bold transition">
+                        📄 Descargar PDF
+                    </a>
+                    <a href="{{ route('invoices.xml', $invoice) }}" class="px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-900 dark:text-indigo-100 dark:border-indigo-600 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-800 text-sm font-bold transition">
+                        💻 Descargar XML
+                    </a>
+                @endif
                 <!-- Botón Copiar a Nueva Factura -->
-            <a href="{{ route('invoices.create', ['company_id' => $invoice->company_id, 'copy_from' => $invoice->id]) }}" 
-               class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-semibold text-xs uppercase tracking-widest rounded-md shadow-sm transition ease-in-out duration-150">
-                📋 Copiar a nueva
-            </a>
+                <a href="{{ route('invoices.create', ['company_id' => $invoice->company_id, 'copy_from' => $invoice->id]) }}" 
+                   class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-semibold text-xs uppercase tracking-widest rounded-md shadow-sm transition ease-in-out duration-150">
+                    📋 Copiar a nueva
+                </a>
             @elseif($invoice->status === 'draft')
                 <a href="{{ route('invoices.edit', $invoice) }}" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-bold transition shadow-md">
                     ✏️ Continuar Edición
@@ -84,15 +87,24 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-600">
-                            @foreach ($invoice->items as $item)
+                            @php
+                                // Convertimos el String crudo de la BD a un arreglo asociativo manejable
+                                $conceptos = is_string($invoice->items) ? json_decode($invoice->items, true) : $invoice->items;
+                                // Si por alguna razón falla, lo convertimos en array vacío
+                                $conceptos = is_array($conceptos) ? $conceptos : [];
+                            @endphp
+                            
+                            @foreach ($conceptos as $item)
                                 <tr class="text-gray-700 dark:text-gray-200">
-                                    <td class="px-4 py-3">{{ $item['quantity'] }}</td>
+                                    <td class="px-4 py-3">{{ $item['quantity'] ?? 1 }}</td>
                                     <td class="px-4 py-3">
-                                        <span class="block text-gray-900 dark:text-white">{{ $item['description'] }}</span>
+                                        <span class="block text-gray-900 dark:text-white">{{ $item['description'] ?? 'Sin descripción' }}</span>
                                         <span class="block text-xs text-gray-500 dark:text-gray-400 mt-1">Clave SAT: {{ $item['sat_product_key'] ?? 'N/A' }}</span>
                                     </td>
-                                    <td class="px-4 py-3 text-right">${{ number_format($item['price'], 2) }}</td>
-                                    <td class="px-4 py-3 text-right font-bold text-gray-900 dark:text-white">${{ number_format($item['total'], 2) }}</td>
+                                    <td class="px-4 py-3 text-right">${{ number_format($item['price'] ?? 0, 2) }}</td>
+                                    <td class="px-4 py-3 text-right font-bold text-gray-900 dark:text-white">
+                                        ${{ number_format($item['total'] ?? (($item['quantity'] ?? 1) * ($item['price'] ?? 0)), 2) }}
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>
