@@ -1,5 +1,5 @@
 <x-company-panel-layout :company="$company">
-    {{-- Alpine.js ahora maneja las variables para ambas ventanas modales --}}
+    {{-- Alpine.js ahora maneja las variables para las 3 ventanas modales --}}
     <div x-data="{ 
         cancelModalOpen: false, 
         cancelActionUrl: '', 
@@ -7,7 +7,8 @@
         motive: '02',
         emailModalOpen: false,
         emailActionUrl: '',
-        recipientEmail: ''
+        recipientEmail: '',
+        importXmlModalOpen: false
     }">
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-200">
@@ -16,13 +17,10 @@
             
             {{-- CONTENEDOR DE BOTONES SUPERIORES --}}
             <div class="flex items-center space-x-3">
-                <!-- Botón de Sincronizar -->
-                <form action="{{ route('invoices.sync', ['company_id' => $company->id]) }}" method="POST" class="inline">
-                    @csrf
-                    <button type="submit" class="inline-flex items-center px-4 py-2 bg-green-600 dark:bg-green-500 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 dark:hover:bg-green-600 transition ease-in-out duration-150 shadow-sm" onclick="return confirm('¿Deseas buscar e importar facturas previas emitidas desde Facturama?')">
-                        🔄 Sincronizar Anteriores
-                    </button>
-                </form>
+                <!-- Botón de Importar XML -->
+                <button @click="importXmlModalOpen = true" class="inline-flex items-center px-4 py-2 bg-green-600 dark:bg-green-500 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 dark:hover:bg-green-600 transition ease-in-out duration-150 shadow-sm">
+                    📄 Importar XML
+                </button>
 
                 <!-- Botón de Nueva Factura -->
                 <a href="{{ route('invoices.create', ['company_id' => $company->id]) }}" class="inline-flex items-center px-4 py-2 bg-gray-800 dark:bg-gray-200 border border-transparent rounded-md font-semibold text-xs text-white dark:text-gray-800 uppercase tracking-widest hover:bg-gray-700 dark:hover:bg-white shadow-sm transition ease-in-out duration-150">
@@ -130,17 +128,25 @@
                                             @else
                                                 {{-- Opciones para Timbradas / Canceladas --}}
                                                 <a href="{{ route('invoices.show', $invoice) }}" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 font-bold">Ver Detalles</a>
-                                                <a href="{{ route('invoices.pdf', $invoice) }}" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900">PDF</a>
-                                                <a href="{{ route('invoices.xml', $invoice) }}" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900">XML</a>
+                                                
+                                                {{-- Si NO fue importada por XML, mostramos PDF/XML de Facturama --}}
+                                                @if($invoice->facturama_id !== 'XML_IMPORTADO')
+                                                    <a href="{{ route('invoices.pdf', $invoice) }}" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900">PDF</a>
+                                                    <a href="{{ route('invoices.xml', $invoice) }}" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900">XML</a>
+                                                @endif
                                                 
                                                 @if($invoice->status === 'issued')
-                                                    <button @click="emailModalOpen = true; emailActionUrl = '{{ route('invoices.email', $invoice) }}'; recipientEmail = '{{ $invoice->client->email ?? '' }}'" class="text-green-600 dark:text-green-400 hover:text-green-900">Enviar</button>
+                                                    @if($invoice->facturama_id !== 'XML_IMPORTADO')
+                                                        <button @click="emailModalOpen = true; emailActionUrl = '{{ route('invoices.email', $invoice) }}'; recipientEmail = '{{ $invoice->client->email ?? '' }}'" class="text-green-600 dark:text-green-400 hover:text-green-900">Enviar</button>
+                                                    @endif
                                                     
                                                     @if($invoice->payment_method === 'PPD')
                                                         <a href="{{ route('payments.index', $invoice) }}" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 font-bold">Pagos</a>
                                                     @endif
 
-                                                    <button @click="cancelModalOpen = true; cancelActionUrl = '{{ route('invoices.cancel', $invoice) }}'" class="text-red-600 dark:text-red-400 hover:text-red-900">Cancelar</button>
+                                                    @if($invoice->facturama_id !== 'XML_IMPORTADO')
+                                                        <button @click="cancelModalOpen = true; cancelActionUrl = '{{ route('invoices.cancel', $invoice) }}'" class="text-red-600 dark:text-red-400 hover:text-red-900">Cancelar</button>
+                                                    @endif
                                                 @endif
                                             @endif
                                         </div>
@@ -155,6 +161,7 @@
             </div>
         </div>
 
+        <!-- MODAL CANCELAR -->
         <div x-show="cancelModalOpen" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30" style="display: none;">
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg" @click.away="cancelModalOpen = false">
                 <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200">Cancelar Factura</h3>
@@ -184,6 +191,7 @@
             </div>
         </div>
 
+        <!-- MODAL CORREO -->
         <div x-show="emailModalOpen" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30" style="display: none;">
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg" @click.away="emailModalOpen = false">
                 <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200">Enviar Factura por Correo</h3>
@@ -200,5 +208,29 @@
                 </form>
             </div>
         </div>
+
+        <!-- MODAL IMPORTAR XML -->
+        <div x-show="importXmlModalOpen" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30" style="display: none;">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg" @click.away="importXmlModalOpen = false">
+                <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200">Importar Factura de Otro Sistema</h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Sube el archivo XML de una factura emitida (Ej. desde Contpaqi o el SAT). El sistema extraerá los datos para que puedas generarle su Complemento de Pago (REP).</p>
+                
+                <form action="{{ route('invoices.import_xml') }}" method="POST" enctype="multipart/form-data">
+                    @csrf
+                    <input type="hidden" name="company_id" value="{{ $company->id }}">
+                    
+                    <div class="mt-4">
+                        <label for="xml_file" class="block font-medium text-sm text-gray-700 dark:text-gray-300">Archivo XML*</label>
+                        <input type="file" id="xml_file" name="xml_file" accept=".xml" class="block mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-gray-700 dark:file:text-gray-300" required>
+                    </div>
+
+                    <div class="mt-6 text-right">
+                        <button type="button" @click="importXmlModalOpen = false" class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm">Cancelar</button>
+                        <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm ml-2">Subir e Importar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
     </div>
 </x-company-panel-layout>

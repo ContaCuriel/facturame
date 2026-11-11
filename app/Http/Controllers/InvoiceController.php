@@ -725,64 +725,83 @@ class InvoiceController extends Controller
         return back()->with('success', '¡Correo enviado exitosamente a ' . $validated['email'] . '!');
     }
 
-    public function syncFromFacturama(Request $request, \App\Services\FacturamaService $facturama)
+    public function importXml(Request $request)
     {
-        $request->validate(['company_id' => 'required|exists:companies,id']);
-        $company = \App\Models\Company::findOrFail($request->query('company_id'));
+        $request->validate([
+            'company_id' => 'required|exists:companies,id',
+            'xml_file' => 'required|file|mimes:xml|max:2048',
+        ]);
+
+        $company = \App\Models\Company::findOrFail($request->company_id);
         $this->authorize('view', $company);
 
         try {
-            // Traemos el historial de facturas activas desde Facturama
-            $facturas = $facturama->getInvoicesList($company->rfc);
+            $xmlContent = file_get_contents($request->file('xml_file')->getRealPath());
+            
+            $xml = simplexml_load_string($xmlContent);
+            if (!$xml) throw new \Exception("El archivo no es un XML válido.");
 
-            if (empty($facturas)) {
-                return back()->with('info', 'No se encontraron facturas en el SAT/Facturama para este RFC.');
+            // Registrar los prefijos para navegar por el XML del SAT (Soporta CFDI 3.3 y 4.0)
+            $namespaces = $xml->getNamespaces(true);
+            $xml->registerXPathNamespace('cfdi', $namespaces['cfdi'] ?? 'http://www.sat.gob.mx/cfd/4');
+            $xml->registerXPathNamespace('tfd', $namespaces['tfd'] ?? 'http://www.sat.gob.mx/TimbreFiscalDigital');
+
+            $comprobante = $xml->xpath('//cfdi:Comprobante')[0] ?? null;
+            $emisor = $xml->xpath('//cfdi:Emisor')[0] ?? null;
+            $receptor = $xml->xpath('//cfdi:Receptor')[0] ?? null;
+            $timbre = $xml->xpath('//tfd:TimbreFiscalDigital')[0] ?? null;
+
+            if (!$comprobante || !$emisor || !$receptor || !$timbre) {
+                throw new \Exception("El XML no tiene el formato estándar de un CFDI válido del SAT.");
             }
 
-            $importadas = 0;
-
-            foreach ($facturas as $cfdi) {
-                // Solo nos interesan las facturas normales (I - Ingreso)
-                if (isset($cfdi['CfdiType']) && $cfdi['CfdiType'] === 'I') {
-                    
-                    // Buscamos si el cliente ya existe en el ERP, si no, lo creamos rápido
-                    $client = \App\Models\Client::firstOrCreate(
-                        ['rfc' => $cfdi['Receiver']['Rfc'], 'company_id' => $company->id],
-                        [
-                            'name' => $cfdi['Receiver']['Name'],
-                            'fiscal_regime' => '616', // Valor por defecto seguro
-                            'zip_code' => '00000',    // Valor por defecto seguro
-                        ]
-                    );
-
-                    // Guardamos la factura en la base de datos local
-                    \App\Models\Invoice::updateOrCreate(
-                        ['uuid' => $cfdi['Uuid']], // Usamos el UUID para no duplicar
-                        [
-                            'company_id' => $company->id,
-                            'client_id' => $client->id,
-                            'facturama_id' => $cfdi['Id'],
-                            'series' => $cfdi['Serie'] ?? '',
-                            'folio' => $cfdi['Folio'] ?? '',
-                            'payment_form' => $cfdi['PaymentForm'] ?? '99',
-                            'payment_method' => $cfdi['PaymentMethod'] ?? 'PPD',
-                            'cfdi_use' => $cfdi['Receiver']['CfdiUse'] ?? 'G03',
-                            'subtotal' => $cfdi['Subtotal'] ?? 0,
-                            'total' => $cfdi['Total'] ?? 0,
-                            'status' => 'issued',
-                            'date' => date('Y-m-d', strtotime($cfdi['Date'])),
-                            // Guardamos un JSON vacío o genérico para items antiguos
-                            'items' => json_encode([['description' => 'Conceptos importados del SAT', 'quantity' => 1, 'price' => $cfdi['Subtotal']]]) 
-                        ]
-                    );
-                    $importadas++;
-                }
+            // Candado de seguridad: Evitar que suban facturas de otra empresa
+            $rfcEmisor = (string) $emisor['Rfc'];
+            if (strtoupper($rfcEmisor) !== strtoupper($company->rfc)) {
+                throw new \Exception("El RFC emisor del XML ({$rfcEmisor}) no coincide con tu empresa ({$company->rfc}).");
             }
 
-            return back()->with('success', "¡Sincronización exitosa! Se actualizaron/importaron {$importadas} facturas desde el SAT.");
+            $uuid = (string) $timbre['UUID'];
+            $metodoPago = (string) $comprobante['MetodoPago'];
+            
+            // Creamos o encontramos al cliente basándonos en el XML
+            $client = \App\Models\Client::firstOrCreate(
+                ['rfc' => (string) $receptor['Rfc'], 'company_id' => $company->id],
+                [
+                    'name' => (string) $receptor['Nombre'],
+                    'fiscal_regime' => isset($receptor['RegimenFiscalReceptor']) ? (string) $receptor['RegimenFiscalReceptor'] : '616',
+                    'zip_code' => isset($receptor['DomicilioFiscalReceptor']) ? (string) $receptor['DomicilioFiscalReceptor'] : '00000',
+                ]
+            );
+
+            // Guardamos la Factura en la BD
+            \App\Models\Invoice::updateOrCreate(
+                ['uuid' => $uuid],
+                [
+                    'company_id' => $company->id,
+                    'client_id' => $client->id,
+                    'facturama_id' => 'XML_IMPORTADO', // Etiqueta para saber que vino de otro sistema
+                    'series' => (string) $comprobante['Serie'] ?? '',
+                    'folio' => (string) $comprobante['Folio'] ?? '',
+                    'payment_form' => (string) $comprobante['FormaPago'] ?? '99',
+                    'payment_method' => $metodoPago,
+                    'cfdi_use' => (string) $receptor['UsoCFDI'] ?? 'G03',
+                    'subtotal' => (float) $comprobante['SubTotal'],
+                    'total' => (float) $comprobante['Total'],
+                    'status' => 'issued',
+                    'date' => date('Y-m-d', strtotime((string) $comprobante['Fecha'])),
+                    'items' => json_encode([['description' => 'Factura importada vía XML', 'quantity' => 1, 'price' => (float) $comprobante['SubTotal']]])
+                ]
+            );
+
+            $msg = $metodoPago === 'PPD' 
+                ? "¡XML Importado! Al ser una factura PPD a crédito, ya puedes ir a registrarle sus pagos."
+                : "XML importado correctamente (Factura de Contado PUE).";
+
+            return back()->with('success', $msg);
 
         } catch (\Exception $e) {
-            return back()->with('error', 'Error al sincronizar con Facturama: ' . $e->getMessage());
+            return back()->with('error', 'Error al procesar XML: ' . $e->getMessage());
         }
     }
 

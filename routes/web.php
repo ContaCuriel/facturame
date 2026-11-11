@@ -80,8 +80,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/webhooks/facturama', [App\Http\Controllers\WebhookController::class, 'handle']);
     
     // Rutas de Factura
-    Route::post('/invoices/sync', [\App\Http\Controllers\InvoiceController::class, 'syncFromFacturama'])->name('invoices.sync');
-    Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
+    Route::post('/invoices/import-xml', [\App\Http\Controllers\InvoiceController::class, 'importXml'])->name('invoices.import_xml');    Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
     Route::get('/invoices/{invoice}/xml', [InvoiceController::class, 'downloadXml'])->name('invoices.xml');
     Route::delete('/invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
     Route::post('/invoices/{invoice}/send-email', [InvoiceController::class, 'sendByEmail'])->name('invoices.email');
