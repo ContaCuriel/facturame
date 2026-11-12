@@ -67,8 +67,7 @@
                         <p><strong class="dark:text-white">Régimen:</strong> {{ $invoice->client->fiscal_regime ?? 'N/A' }}</p>
                     </div>
                     <div>
-                        <p><strong class="dark:text-white">Fecha de Emisión:</strong> {{ $invoice->created_at->format('d/m/Y H:i A') }}</p>
-                        <p><strong class="dark:text-white">Uso de CFDI:</strong> {{ $invoice->client->cfdi_use ?? 'N/A' }}</p>
+                        <p><strong class="dark:text-white">Fecha de Emisión:</strong> {{ \Carbon\Carbon::parse($invoice->date)->format('d/m/Y') }}</p>                        <p><strong class="dark:text-white">Uso de CFDI:</strong> {{ $invoice->client->cfdi_use ?? 'N/A' }}</p>
                         <p><strong class="dark:text-white">Método de Pago:</strong> {{ $invoice->payment_method }}</p>
                     </div>
                 </div>
